@@ -1,11 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <divsufsort.h>
 
 int genome_length;
 
-int *create_suffix_array(int *suffix_array,char *s)
+int *init_suffix_array(int *suffix_array,char *s)
 {
  int i;
  //initialize suffix array
@@ -41,15 +40,12 @@ int compare_rotations(char *s, int start1, int start2)
  int i = rotation_break;
  int origin1 = start1;
  int origin2 = start2;
- printf("i je: %d, znaky su %d %c a %d %c\n",i,start1,s[start1],start2,s[start2]);
  while (i!=genome_length && s[start1]==s[start2])
  {
   i++;
   start1++;
   start2++;
  }
-  printf("porovnavam %d %c, %d %c",start1,s[start1],start2,s[start2]);
- printf("i je: %d, znaky su %d %c a %d %c\n",i,start1,s[start1],start2,s[start2]);
  if (s[start1]==s[start2])
  {
   i = 0;
@@ -60,19 +56,47 @@ int compare_rotations(char *s, int start1, int start2)
    start2++;
   }
  }
- printf("i je: %d, znaky su %d %c a %d %c\n",i,start1,s[start1],start2,s[start2]);
  if (s[start1]<s[start2])
   return origin1;
- else return origin2;
+ else 
+  return origin2;
+}
+
+int *insertion_sort_array(int *suffix_array, char *s)
+{
+ int i = 0;
+ int j;
+ int swap_temp;
+ while (i != genome_length)
+ {
+  j = i;
+  while (j > 0 && compare_rotations(s,suffix_array[j-1],suffix_array[j])==suffix_array[j])
+  {
+   swap_temp = suffix_array[j-1];
+   suffix_array[j-1] = suffix_array[j];
+   suffix_array[j] = swap_temp;
+   j--;
+  }
+  i++;
+ }
+ return suffix_array;
 }
 
 char *create_bwt(int *suffix_array, char *s)
 {
  int i;
  char *bwt = (char *) malloc (genome_length * sizeof(char));
- printf("porovnavam pozicie 1 a 3: %d\n",compare_rotations(s,1,3));
+ suffix_array = insertion_sort_array(suffix_array,s); 
+ for(i=0;i<genome_length;i++)
+ {
+  if (suffix_array[i]==0)
+   bwt[i] = s[genome_length-1];
+  else bwt[i] = s[suffix_array[i]-1];
+ }
+ printf("bwt je : %s",bwt);
+ printf("vypis vysledky");
  for (i = 0; i<genome_length; i++)
-  printf("%d %c\n",suffix_array[i],s[i]);
+  printf("%d %c",suffix_array[i],s[i]);
  return bwt;
 }
 
@@ -80,23 +104,25 @@ int main(void)
 {
  int i,j;
  int *suffix_array = NULL;;
- char *s = "ACGTAGGCGTCCA";
+ char *s = "ACGTACACGTA";
  char *bwt = NULL;
  
  //load genome
  genome_length = strlen(s);
+ printf("%d genome", genome_length);
 
  //create suffix array of genome
- suffix_array = create_suffix_array(suffix_array,s); 
+ suffix_array = init_suffix_array(suffix_array,s); 
  bwt = create_bwt(suffix_array,s);
 
  for(i = 0;i<genome_length;++i)
  {
   printf("SA[%2d] = %2d: ", i, suffix_array[i]);
-  for (j = 0; j<genome_length;++j)
+  for (j = suffix_array[i]; j<genome_length;++j)
   {
-   printf("%c", s[j]);
+   printf("%c ", s[j]);
   }
+ printf("\n");
  }
 
  free(suffix_array);
