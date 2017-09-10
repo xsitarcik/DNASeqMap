@@ -89,9 +89,5 @@ char *create_bwt(int *suffix_array, char *s, int genome_length)
    bwt[i] = s[genome_length-1];
   else bwt[i] = s[suffix_array[i]-1];
  }
- printf("bwt je : %s",bwt);
- printf("vypis vysledky");
- for (i = 0; i<genome_length; i++)
-  printf("%d %c",suffix_array[i],s[i]);
  return bwt;
 }

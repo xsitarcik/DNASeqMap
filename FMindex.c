@@ -3,13 +3,25 @@
 #include <string.h>
 #include "FMindex.h"
 
+struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet)
+{
+ struct FMIndex *FM_index = (struct FMIndex*) malloc(sizeof(struct FMIndex));
+ FM_index->bwt = bwt;
+ FM_index->sample_SA_size = sample_SA_size;
+ FM_index->sample_OCC_size = sample_OCC_size;
+ FM_index->alphabet = alphabet;
+ FM_index->length = genome_length;
+ FM_index->sampleSA = create_sample_SA(suffix_array,sample_SA_size,genome_length);
+ FM_index->count_table = create_count_table(bwt,genome_length,alphabet);
+ FM_index->occurence_table = create_occurence_table(bwt,genome_length,alphabet,sample_OCC_size);
+ return FM_index;
+}
 int *create_sample_SA(int *suffix_array,int sample_size, int array_size)
 {
  int i = 0;
  int sampled_index=0;
  int samples_count = (array_size+sample_size)/sample_size;
  int *sampleSA = (int *) malloc((samples_count)*sizeof(int)); 
- printf("samples_count SA je %d\n",samples_count);
  if (sampleSA==NULL)
   {
    printf("Error. No memory when allocating sample of suffix array\n");
@@ -25,20 +37,21 @@ int *create_sample_SA(int *suffix_array,int sample_size, int array_size)
 }
 
 //procedure to get SA value from sample suffix array
-int get_SA_value(int bwt_position, char c, int character, struct FMIndex *fm_index)
+int get_SA_value(int bwt_position, char c, struct FMIndex *fm_index)
 {
  int count = 0;
+ int character = get_alphabet_index(fm_index->alphabet,c);
  while(bwt_position%fm_index->sample_SA_size!=0)
  {
-  bwt_position = last_to_first(c, character, bwt_position, fm_index);
+  bwt_position = last_to_first(c, bwt_position, fm_index);
   count++;
  }
  return (fm_index->sampleSA[bwt_position%fm_index->sample_SA_size]+count);
 }
 
-int last_to_first(char c, int character, int bwt_position, struct FMIndex *fm_index)
+int last_to_first(char c, int bwt_position, struct FMIndex *fm_index)
 {
- printf("mofo\n");
+ int character = get_alphabet_index(fm_index->alphabet,c);
  int last = fm_index->count_table[character]-1 + count_occ(fm_index->bwt,fm_index->occurence_table,bwt_position,c,character,fm_index->sample_OCC_size);
  return last;
 }
@@ -80,10 +93,6 @@ int **create_occurence_table(char *s, int string_length, char *alphabet, int sam
  int i;
  int j;
  int index = 0;
-printf("s je %s\n",s);
- printf("alphabet size je %d, string length je %d \n",alphabet_size, string_length);
- printf("samples_count je %d\n", samples_count);
- printf("sample_size je %d\n",sample_size);
  for (i=0;i<alphabet_size;i++)
  {
   occurence_table[i] = (int *)malloc(samples_count*sizeof(int));
@@ -93,26 +102,20 @@ printf("s je %s\n",s);
    exit(1);
   }
  }
- printf("idk\n");
  //initialize number of occurences at zero position
  for (i=0;i<alphabet_size;i++)
  {
-  printf("i je %d\n",i);
   if (s[0]==alphabet[i])
    occurence_table[i][0] = 1;
   else
    occurence_table[i][0] = 0;
-  printf("done\n");
  }
- printf("wtf ?\n");
  for (i=1;i<string_length;i++)
  {
   index = (i+sample_size-1)/sample_size;
-  printf("i je %d a index je %d\n",i,index);
   if (i%sample_size==1)
    for (j=0;j<alphabet_size;j++)
     occurence_table[j][index]=occurence_table[j][index-1];
-  printf("%d %d %d %d %d\n",occurence_table[0][index],occurence_table[1][index],occurence_table[2][index],occurence_table[3][index],occurence_table[4][index]);
   for (j=0;j<alphabet_size;j++)
    if (s[i]==alphabet[j])
     occurence_table[j][index]++;     
@@ -122,7 +125,6 @@ printf("s je %s\n",s);
 
 int count_occ(char *s, int **occurence_table, int position, char c, int character, int sample_size)
 {
- printf("position %d, c %c, character %d\n",position,c,character);
  int count = 0;
  //kde je blizsie
  int a = position/sample_size;
@@ -138,26 +140,25 @@ int count_occ(char *s, int **occurence_table, int position, char c, int characte
    count = count - turn;
   position = position + turn;
  }
- printf("vraciam pre poziciu %d a znak %c hodnoty %d\n",position,c,character);
- printf("hodnotu beriem z %d a count je %d\n",position/sample_size,count);
- printf("vysledok je %d\n",occurence_table[character][position/sample_size]+count);
  return occurence_table[character][position/sample_size]+count;
 }
-char *reverseBWT(char *bwt,int end,int length, char *alphabet, struct FMIndex *fm_index)
+
+char *reverseBWT(int end, struct FMIndex *fm_index)
 {
  int i = 0;
- int j = length -1;
- char *reversed = (char *)malloc(sizeof(char)*length);
- while (i++!=length)
+ int j = fm_index->length -1;
+ char a;
+ char *reversed = (char *)malloc(sizeof(char)*fm_index->length);
+ while (i++!=fm_index->length)
  {
-  printf("i je %d , je %d\n",i,j);
-  reversed[j]=bwt[end];
-  printf("na poziciu %d ukladam %c\n",j,bwt[end]);
+  a = fm_index->bwt[end];
+  reversed[j] = a;
   j--;
-  end = last_to_first(bwt[end],get_alphabet_index(alphabet,bwt[end]),end,fm_index);
+  end = last_to_first(a,end,fm_index);
  }
 return reversed;
 }
+
 int get_alphabet_index(char *alphabet, char c)
 {
  int i = 0;
@@ -165,12 +166,14 @@ int get_alphabet_index(char *alphabet, char c)
   i++;
  return i;
 }
+
 void print_occurence_table(int **occurence_table, int alphabet_size, int sample_OCC_size, int length)
 {
  int i,j;
  printf("Printing occurence table:\n");
  for (j=0;j<(length+sample_OCC_size)/sample_OCC_size;j++)
  {
+  printf("%d: ",j*sample_OCC_size);
   for (i=0;i<alphabet_size;i++)
   {
   printf("%d ",occurence_table[i][j]);
@@ -179,3 +182,12 @@ void print_occurence_table(int **occurence_table, int alphabet_size, int sample_
  }
 }
 
+void print_sample_SA(struct FMIndex *fm_index)
+{
+ int i;
+ int samples = (fm_index->length+fm_index->sample_SA_size)/fm_index->sample_SA_size;
+ int *sample_SA = fm_index->sampleSA;
+ printf("Printing sample suffix array:\n");
+ for (i = 0; i<samples;i++)
+  printf("%d = %d\n",i*fm_index->sample_SA_size,sample_SA[i]);
+}
