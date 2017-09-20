@@ -11,11 +11,22 @@ struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_
  FM_index->sample_OCC_size = sample_OCC_size;
  FM_index->alphabet = alphabet;
  FM_index->length = genome_length;
+ FM_index->end = find_end(suffix_array);
  FM_index->sampleSA = create_sample_SA(suffix_array,sample_SA_size,genome_length);
+ free(suffix_array);
  FM_index->count_table = create_count_table(bwt,genome_length,alphabet);
  FM_index->occurence_table = create_occurence_table(bwt,genome_length,alphabet,sample_OCC_size);
  return FM_index;
 }
+
+int find_end(int *suffix_array)
+{
+int i = 0;
+while(suffix_array[i]!=0)
+ i++;
+return i;
+}
+
 int *create_sample_SA(int *suffix_array,int sample_size, int array_size)
 {
  int i = 0;
@@ -89,10 +100,10 @@ int **create_occurence_table(char *s, int string_length, char *alphabet, int sam
 {
  int alphabet_size = strlen(alphabet);
  int samples_count = (string_length+sample_size)/sample_size;
- int **occurence_table = (int **)malloc(alphabet_size*sizeof(int*));
  int i;
  int j;
  int index = 0;
+ int **occurence_table = (int **)malloc(alphabet_size*sizeof(int*));
  for (i=0;i<alphabet_size;i++)
  {
   occurence_table[i] = (int *)malloc(samples_count*sizeof(int));
@@ -143,12 +154,18 @@ int count_occ(char *s, int **occurence_table, int position, char c, int characte
  return occurence_table[character][position/sample_size]+count;
 }
 
-char *reverseBWT(int end, struct FMIndex *fm_index)
+char *reverseBWT(struct FMIndex *fm_index)
 {
  int i = 0;
  int j = fm_index->length -1;
+ int end = fm_index->end;
  char a;
  char *reversed = (char *)malloc(sizeof(char)*fm_index->length);
+ if (reversed==NULL)
+ {
+  printf("Error. No memory when allocating memory when reversing string\n");
+  exit(1);
+ }
  while (i++!=fm_index->length)
  {
   a = fm_index->bwt[end];
@@ -167,16 +184,19 @@ int get_alphabet_index(char *alphabet, char c)
  return i;
 }
 
-void print_occurence_table(int **occurence_table, int alphabet_size, int sample_OCC_size, int length)
+void print_occurence_table(struct FMIndex *fm_index)
 {
  int i,j;
+ int alphabet_size = strlen(fm_index->alphabet);
+ int sample_OCC_size = fm_index->sample_OCC_size;
+ int length = fm_index->length;
  printf("Printing occurence table:\n");
  for (j=0;j<(length+sample_OCC_size)/sample_OCC_size;j++)
  {
   printf("%d: ",j*sample_OCC_size);
   for (i=0;i<alphabet_size;i++)
   {
-  printf("%d ",occurence_table[i][j]);
+  printf("%d ",fm_index->occurence_table[i][j]);
   }
   printf("\n");
  }
@@ -190,4 +210,25 @@ void print_sample_SA(struct FMIndex *fm_index)
  printf("Printing sample suffix array:\n");
  for (i = 0; i<samples;i++)
   printf("%d = %d\n",i*fm_index->sample_SA_size,sample_SA[i]);
+}
+
+void print_count_table(struct FMIndex *fm_index)
+{
+ unsigned int i = 0;
+ printf("Printing count table: \n");
+ for (i = 0; i<strlen(fm_index->alphabet); i++)
+  printf("%4c ",fm_index->alphabet[i]);
+ printf("\n");
+ for (i = 0; i<strlen(fm_index->alphabet); i++)
+  printf("%4d ",fm_index->count_table[i]);
+ printf("\n");
+}
+
+void print_info_fm_index(struct FMIndex *fm_index)
+{
+ printf("Stored BWT is: %s\n",fm_index->bwt);
+ printf("Reversed   is: %s\n",reverseBWT(fm_index));
+ print_count_table(fm_index);
+ print_sample_SA(fm_index);
+ print_occurence_table(fm_index);
 }
