@@ -16,6 +16,7 @@ int main(void)
  int *sample_SA = NULL;
  char *s = "AACGATAACGATAACGATTGACAGTA$";
  char *bwt = NULL;
+ unsigned char *bitvector;
  struct FMIndex *FM_index;
  char *alphabet = "$ACGT";
  struct symbol_table *front = NULL;
@@ -45,7 +46,8 @@ int main(void)
  print_info_fm_index(FM_index);
  
  front = build_symbol_table(alphabet);
- move_to_front_encode(front,FM_index->bwt);
+ bitvector = move_to_front_encode(front,FM_index->bwt);
+ print_bit_vector(bitvector);
 //app matching:
 // read sequence R one by one
 // according to error E

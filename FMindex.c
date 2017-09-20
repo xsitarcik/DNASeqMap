@@ -226,6 +226,7 @@ void print_count_table(struct FMIndex *fm_index)
 
 void print_info_fm_index(struct FMIndex *fm_index)
 {
+ printf("Length of BWT is: %d\n",fm_index->length);
  printf("Stored BWT is: %s\n",fm_index->bwt);
  printf("Reversed   is: %s\n",reverseBWT(fm_index));
  print_count_table(fm_index);
