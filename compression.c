@@ -34,7 +34,12 @@ struct symbol_table *build_symbol_table(char *alphabet)
  return front;
 }
 
-unsigned char* move_to_front_encode (struct symbol_table *front, char *s)
+struct symbol_table *push_to_front(struct symbol_table *front, struct symbol_table *new)
+{
+
+}
+
+unsigned char* move_to_front_encode (struct symbol_table *front, char *s, unsigned int *bitvector_length)
 {
  unsigned char*bitvector = NULL;
  unsigned char bits_per_char;
@@ -53,12 +58,9 @@ unsigned char* move_to_front_encode (struct symbol_table *front, char *s)
  struct symbol_table *swap;
  while (current->next!=NULL)
  {
-  printf("inddex %d = %c\n",symbols_count,current->symbol);
   symbols_count++;
   current = current->next;
  }
- printf("inddex %d = %c\n",symbols_count,current->symbol);
- printf("pocet symbolov je %d\n",symbols_count);
  while (symbols_count>=i)
  {
   j++;
@@ -68,6 +70,7 @@ unsigned char* move_to_front_encode (struct symbol_table *front, char *s)
  bits_per_char = j;
  wrong_pos = 8 - bits_per_char + 1;
  printf("totally we need %d bits\n",j*string_length);
+ *bitvector_length = j*string_length;
  needed_bytes = j*string_length/8 + 1;
  printf("we'll be allocating %d bytes\n",needed_bytes);
  bitvector = (unsigned char *)malloc(needed_bytes); 
@@ -82,20 +85,17 @@ unsigned char* move_to_front_encode (struct symbol_table *front, char *s)
  {
   count = 0;
   current = front;
-  printf("na fronte je symbol %c\n",front->symbol);
   while (current->symbol != s[i])
   {
    current = current->next;
    count++;
   }
-  printf("kod je %d, ukladam na j=%d\n",count,j);
   byte_index = j/8;
   in_byte = j%8;
   if (in_byte<wrong_pos)
   {
    bitvector[byte_index] = bitvector[byte_index] << bits_per_char;
    bitvector[byte_index] = bitvector[byte_index] + count;
-   printf("na %d som supol %d\n",byte_index,count);
   }
   else
   {
@@ -103,12 +103,9 @@ unsigned char* move_to_front_encode (struct symbol_table *front, char *s)
    remainder = count >> (bits_per_char - k);
    bitvector[byte_index] = bitvector[byte_index] << k;
    bitvector[byte_index] = bitvector[byte_index] + remainder;
-   printf("na %d som supol %d\n",byte_index,remainder);
    k = get_set_bits(bits_per_char-k);
-   printf("k je %d\n",k); 
    remainder = count & k;
    bitvector[byte_index + 1] = bitvector[byte_index + 1] + remainder;
-   printf("na %d som supol %d\n",byte_index,remainder);
   }
   j = j + bits_per_char;
   if (count != 0)
@@ -127,17 +124,14 @@ unsigned char* move_to_front_encode (struct symbol_table *front, char *s)
    current->next = front;
    front->previous = current;
    front = current;
-  } 
-  while (current->next!=NULL)
-   {
-    printf("%c ",current->symbol); 
-    current=current->next;
-   }
-   printf("%c\n",current->symbol);
   }
-printf("\n");
- for (i=0;i<needed_bytes;i++)
-  printf("%d ",bitvector[i]);
+ } 
+ printf("\n");
+ in_byte = j%8;
+ byte_index = j/8;
+ k = 8 - in_byte;
+ bitvector[byte_index] = bitvector[byte_index] << k;
+ 
  return bitvector;
 }
 
@@ -150,11 +144,11 @@ unsigned char get_set_bits(unsigned char bits)
  return (ret - 1);
 }
 
-void print_bit_vector(unsigned char *bitvector)
+void print_bit_vector(unsigned char *bitvector, unsigned int bitvector_length)
 {
- int size = strlen(bitvector);
  int i,j;
-printf("\nsize je %d\n",size);
+ int size = bitvector_length/8 + 1;
+ printf("Actual length is: %d bits\n",bitvector_length);
  for (i=0;i<size;i++)
  {
   for(j=0;j<8;j++)
@@ -164,4 +158,5 @@ printf("\nsize je %d\n",size);
   }
   printf(" ");
  }
+ printf("\n");
 }

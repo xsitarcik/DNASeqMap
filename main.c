@@ -6,7 +6,7 @@
 #include "compression.h"
 
 int genome_length;
-int sample_OCC_size = 4;
+int sample_OCC_size = 8;
 int sample_SA_size = 4;
 
 int main(void)
@@ -17,6 +17,7 @@ int main(void)
  char *s = "AACGATAACGATAACGATTGACAGTA$";
  char *bwt = NULL;
  unsigned char *bitvector;
+ unsigned int *bitvector_length;
  struct FMIndex *FM_index;
  char *alphabet = "$ACGT";
  struct symbol_table *front = NULL;
@@ -45,9 +46,12 @@ int main(void)
  printf("Org string is: %s\n",s);
  print_info_fm_index(FM_index);
  
+ printf("----MTF Encoding----\n");
  front = build_symbol_table(alphabet);
- bitvector = move_to_front_encode(front,FM_index->bwt);
- print_bit_vector(bitvector);
+ bitvector_length = (int*) malloc(sizeof(int));
+ bitvector = move_to_front_encode(front,FM_index->bwt,bitvector_length);
+ print_bit_vector(bitvector, *bitvector_length);
+ printf("----RLE----\n");
 //app matching:
 // read sequence R one by one
 // according to error E
