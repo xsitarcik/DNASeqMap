@@ -20,7 +20,6 @@ int main(void)
  unsigned int *bitvector_length;
  struct FMIndex *FM_index;
  char *alphabet = "$ACGT";
- struct symbol_table *front = NULL;
  //load genome
  //appendovanie $
  //abeceda
@@ -47,11 +46,10 @@ int main(void)
  print_info_fm_index(FM_index);
  
  printf("----MTF Encoding----\n");
- front = build_symbol_table(alphabet);
  bitvector_length = (int*) malloc(sizeof(int));
- bitvector = move_to_front_encode(front,FM_index->bwt,bitvector_length);
+ bitvector = move_to_front_encode(FM_index->alphabet,FM_index->bwt,bitvector_length);
  print_bit_vector(bitvector, *bitvector_length);
- printf("----RLE----\n");
+ s = move_to_front_decode(FM_index->alphabet,*bitvector_length,bitvector);
 //app matching:
 // read sequence R one by one
 // according to error E

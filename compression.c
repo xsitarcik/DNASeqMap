@@ -34,12 +34,91 @@ struct symbol_table *build_symbol_table(char *alphabet)
  return front;
 }
 
-struct symbol_table *push_to_front(struct symbol_table *front, struct symbol_table *new)
+struct symbol_table *push_to_front(struct symbol_table *front, struct symbol_table *current)
 {
-
+ struct symbol_table *swap;
+ if (current->previous!=NULL)
+ {
+  swap = current->previous;
+  swap->next = current->next;
+ }
+ if (current->next!=NULL)
+ {
+  swap = current->next;
+  swap->previous = current->previous;
+ }
+ current->previous = NULL;
+ current->next = front;
+ front->previous = current;
+ return current;
 }
 
-unsigned char* move_to_front_encode (struct symbol_table *front, char *s, unsigned int *bitvector_length)
+char *move_to_front_decode (char *alphabet, unsigned int bitvector_length,unsigned char*bitvector)
+{
+ struct symbol_table *front = build_symbol_table(alphabet);
+ struct symbol_table *current;
+ int i, index;
+ unsigned char shift, start;
+ unsigned char bits_per_char = get_min_bits_per_char(front);
+ unsigned char code, next_code;
+ int wrong_pos = wrong_pos = 8 - bits_per_char + 1;
+ for (i=0;i<bitvector_length;i=i+bits_per_char)
+ {
+  index = i/8;
+  start = i%8;
+  code = bitvector[index];
+  if (start<wrong_pos)
+  {
+   code = code >> (8 - start - bits_per_char);
+  }
+  else 
+  {
+   shift = start + bits_per_char - 8;
+   code = code << shift;
+   next_code = bitvector[index + 1];
+   next_code = next_code >> (8 - shift);
+   code = code | next_code;
+  } 
+  code = code & 7;
+  current = decode(front,code);
+  printf("%c",current->symbol);
+  if (current->symbol != front->symbol)
+   front = push_to_front(front,current);
+ }
+ return bitvector;
+}
+
+struct symbol_table *decode(struct symbol_table *front, unsigned char code)
+{
+ unsigned char i = 0;
+ struct symbol_table *current = front;
+ while (i!=code)
+ {
+  current = current->next;
+  i++;
+ }
+ return current;
+}
+
+unsigned char get_min_bits_per_char(struct symbol_table *front)
+{
+unsigned int symbols_count = 1;
+unsigned int i = 2;
+unsigned int j = 1;
+struct symbol_table*current = front;
+while (current->next!=NULL)
+ {
+  symbols_count++;
+  current = current->next;
+ }
+ while (symbols_count>=i)
+ {
+  j++;
+  i = i *2;
+ }
+ return j;
+}
+unsigned char* move_to_front_encode (char *alphabet, char *s, unsigned int *bitvector_length)
 {
  unsigned char*bitvector = NULL;
  unsigned char bits_per_char;
@@ -54,25 +133,12 @@ unsigned char* move_to_front_encode (struct symbol_table *front, char *s, unsign
  int byte_index;
  int in_byte;
  int wrong_pos;
+ struct symbol_table *front = build_symbol_table(alphabet);
  struct symbol_table *current = front;
- struct symbol_table *swap;
- while (current->next!=NULL)
- {
-  symbols_count++;
-  current = current->next;
- }
- while (symbols_count>=i)
- {
-  j++;
-  i = i *2;
- }
- printf("we need %d bits per char\n", j);
- bits_per_char = j;
+ bits_per_char = get_min_bits_per_char(front);
  wrong_pos = 8 - bits_per_char + 1;
- printf("totally we need %d bits\n",j*string_length);
- *bitvector_length = j*string_length;
- needed_bytes = j*string_length/8 + 1;
- printf("we'll be allocating %d bytes\n",needed_bytes);
+ *bitvector_length = bits_per_char*string_length;
+ needed_bytes = bits_per_char*string_length/8 + 1;
  bitvector = (unsigned char *)malloc(needed_bytes); 
  if (bitvector==NULL)
  {
@@ -109,24 +175,8 @@ unsigned char* move_to_front_encode (struct symbol_table *front, char *s, unsign
   }
   j = j + bits_per_char;
   if (count != 0)
-  {
-   if (current->previous!=NULL)
-   {
-    swap = current->previous;
-    swap->next = current->next;
-   }
-   if (current->next!=NULL)
-   {
-    swap = current->next;
-    swap->previous = current->previous;
-   }
-   current->previous = NULL;
-   current->next = front;
-   front->previous = current;
-   front = current;
-  }
+   front = push_to_front(front,current);
  } 
- printf("\n");
  in_byte = j%8;
  byte_index = j/8;
  k = 8 - in_byte;
@@ -148,13 +198,15 @@ void print_bit_vector(unsigned char *bitvector, unsigned int bitvector_length)
 {
  int i,j;
  int size = bitvector_length/8 + 1;
+ unsigned char code;
  printf("Actual length is: %d bits\n",bitvector_length);
  for (i=0;i<size;i++)
  {
+  code = bitvector[i];
   for(j=0;j<8;j++)
   {
-   printf("%i", bitvector[i] & 128 ? 1 : 0);
-   bitvector[i] = bitvector[i] << 1;
+   printf("%i", code & 128 ? 1 : 0);
+   code = code << 1;
   }
   printf(" ");
  }
