@@ -50,20 +50,25 @@ int *create_sample_SA(int *suffix_array,int sample_size, int array_size)
 //procedure to get SA value from sample suffix array
 int get_SA_value(int bwt_position, char c, struct FMIndex *fm_index)
 {
+ //printf("%c znak\n",c);
  int count = 0;
  int character = get_alphabet_index(fm_index->alphabet,c);
  while(bwt_position%fm_index->sample_SA_size!=0)
  {
+  c = fm_index->bwt[bwt_position];
+//  printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
   bwt_position = last_to_first(c, bwt_position, fm_index);
   count++;
  }
- return (fm_index->sampleSA[bwt_position%fm_index->sample_SA_size]+count);
+// printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
+ return (fm_index->sampleSA[bwt_position/fm_index->sample_SA_size]+count);
 }
 
 int last_to_first(char c, int bwt_position, struct FMIndex *fm_index)
 {
  int character = get_alphabet_index(fm_index->alphabet,c);
- int last = fm_index->count_table[character]-1 + count_occ(fm_index->bwt,fm_index->occurence_table,bwt_position,c,character,fm_index->sample_OCC_size);
+ int last = fm_index->count_table[character] + count_occ(fm_index->bwt,fm_index->occurence_table,bwt_position,c,character,fm_index->sample_OCC_size);
+ //printf("predchodca rotacie %d je %d\n",bwt_position,last);
  return last;
 }
 
@@ -116,12 +121,9 @@ int **create_occurence_table(char *s, int string_length, char *alphabet, int sam
  //initialize number of occurences at zero position
  for (i=0;i<alphabet_size;i++)
  {
-  if (s[0]==alphabet[i])
-   occurence_table[i][0] = 1;
-  else
    occurence_table[i][0] = 0;
  }
- for (i=1;i<string_length;i++)
+ for (i=0;i<string_length;i++)
  {
   index = (i+sample_size-1)/sample_size;
   if (i%sample_size==1)
@@ -137,20 +139,22 @@ int **create_occurence_table(char *s, int string_length, char *alphabet, int sam
 int count_occ(char *s, int **occurence_table, int position, char c, int character, int sample_size)
 {
  int count = 0;
+ //printf("hladam pre %d\n",position);
  //kde je blizsie
  int a = position/sample_size;
- int first_bound = position - (a * sample_size);
- int second_bound = ((a+1)*sample_size) - position;
- int turn;
- if (first_bound>second_bound)
-  turn = 1;
- else turn = -1;
- while (position%sample_size!=0)
+ int bound = position - (a * sample_size);
+ //printf("dolne bound je %d\n",bound);
+ while (bound>0)
  {
+  bound--;
+  position--;
+  //printf("znak %c %c, akt count je %d\n",s[position],c,count);
   if (s[position]==c)
-   count = count - turn;
-  position = position + turn;
+   count++;
  }
+ if (s[position]==c)
+   count--;
+ //printf("do %d je pocet %c rovny %d, count=%d occ=%d\n",position,c,occurence_table[character][position/sample_size]+count,occurence_table[character][position/sample_size],count);
  return occurence_table[character][position/sample_size]+count;
 }
 
@@ -232,4 +236,34 @@ void print_info_fm_index(struct FMIndex *fm_index)
  print_count_table(fm_index);
  print_sample_SA(fm_index);
  print_occurence_table(fm_index);
+}
+
+unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern)
+{
+ unsigned int*result=(unsigned int*)malloc(2*sizeof(unsigned int));
+ unsigned char*alphabet = fm_index->alphabet;
+ unsigned char alphabet_size = strlen(alphabet)-1;
+ int *count_table = fm_index->count_table;
+ unsigned int pattern_length = strlen(pattern);
+ int j = pattern_length - 1;
+ int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
+ printf("prvy znak %c index %d\n",pattern[j],alphabet_index);
+ result[0] = count_table[alphabet_index];
+ if (alphabet_index!=alphabet_size)
+  result[1] = count_table[alphabet_index + 1];
+ else 
+  result[1] = fm_index->length;
+ printf("rozsah je %d az %d \n",result[0],result[1]);
+ 
+ while (j>0 && result[0]<=result[1])
+ {
+  j--;
+  alphabet_index = get_alphabet_index(alphabet,pattern[j]);
+  printf("%d-ty znak %c index %d\n",j,pattern[j],alphabet_index);
+  result[0] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[0]-1,pattern[j],alphabet_index,fm_index->sample_OCC_size) + 1;
+  result[1] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[1],pattern[j],alphabet_index,fm_index->sample_OCC_size);
+ printf("rozsah je %d az %d \n",result[0],result[1]);
+
+ }
+ return result;
 }

@@ -45,12 +45,21 @@ int main(void)
  printf("Org string is: %s\n",s);
  print_info_fm_index(FM_index);
  
- printf("----MTF Encoding----\n");
- bitvector_length = (int*) malloc(sizeof(int));
- bitvector = move_to_front_encode(FM_index->alphabet,FM_index->bwt,bitvector_length);
- print_bit_vector(bitvector, *bitvector_length);
- s = move_to_front_decode(FM_index->alphabet,*bitvector_length,bitvector);
-//app matching:
+ //printf("----MTF Encoding----\n");
+ //bitvector_length = (int*) malloc(sizeof(int));
+ //bitvector = move_to_front_encode(FM_index->alphabet,FM_index->bwt,bitvector_length);
+ //print_bit_vector(bitvector, *bitvector_length);
+ //s = move_to_front_decode(FM_index->alphabet,*bitvector_length,bitvector);
+
+ //app matching:
+ int*result = search_pattern(FM_index,"ACG");
+ result[0] = 0;
+ result[1] = 26;
+ while (result[0]<=result[1])
+ {
+ printf("sa value %d je %d\n",result[0],get_SA_value(result[0],FM_index->bwt[result[0]],FM_index));
+ result[0]++;
+ }
 // read sequence R one by one
 // according to error E
 // parse sequence R to E+1 sequences r1... non-overlapping

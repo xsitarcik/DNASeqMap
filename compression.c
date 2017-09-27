@@ -212,3 +212,5 @@ void print_bit_vector(unsigned char *bitvector, unsigned int bitvector_length)
  }
  printf("\n");
 }
+
+
