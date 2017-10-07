@@ -26,3 +26,4 @@ void print_sample_SA(struct FMIndex *fm_index);
 void print_count_table(struct FMIndex *fm_index);
 void print_info_fm_index(struct FMIndex *fm_index);
 unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern);
+unsigned int*approximate_search(int max_error, struct FMIndex *fm_index, char *pattern);

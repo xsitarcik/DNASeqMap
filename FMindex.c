@@ -61,6 +61,12 @@ int get_SA_value(int bwt_position, char c, struct FMIndex *fm_index)
   count++;
  }
 // printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
+ if (!(bwt_position)){
+  if (count)
+    return --count;
+  else 
+    return count;
+}
  return (fm_index->sampleSA[bwt_position/fm_index->sample_SA_size]+count);
 }
 
@@ -247,23 +253,55 @@ unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern)
  unsigned int pattern_length = strlen(pattern);
  int j = pattern_length - 1;
  int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
- printf("prvy znak %c index %d\n",pattern[j],alphabet_index);
+ //printf("prvy znak %c index %d\n",pattern[j],alphabet_index);
  result[0] = count_table[alphabet_index];
  if (alphabet_index!=alphabet_size)
   result[1] = count_table[alphabet_index + 1];
  else 
   result[1] = fm_index->length;
- printf("rozsah je %d az %d \n",result[0],result[1]);
+ //printf("rozsah je %d az %d \n",result[0],result[1]);
  
  while (j>0 && result[0]<=result[1])
  {
   j--;
   alphabet_index = get_alphabet_index(alphabet,pattern[j]);
-  printf("%d-ty znak %c index %d\n",j,pattern[j],alphabet_index);
+  //printf("%d-ty znak %c index %d\n",j,pattern[j],alphabet_index);
   result[0] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[0]-1,pattern[j],alphabet_index,fm_index->sample_OCC_size) + 1;
   result[1] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[1],pattern[j],alphabet_index,fm_index->sample_OCC_size);
- printf("rozsah je %d az %d \n",result[0],result[1]);
+ //printf("rozsah je %d az %d \n",result[0],result[1]);
 
  }
+ if (result[0])
+  result[0]--;
+ result[1]--;
  return result;
 }
+
+unsigned int*approximate_search(int max_error, struct FMIndex *fm_index, char *pattern)
+{
+ int pattern_length = strlen(pattern);
+ int div_pattern_length = (pattern_length+1)/(max_error+1);
+ int i,j; 
+ int *result;
+ printf("%s dlzka vzoru je %d\n",pattern,pattern_length);
+ char *patterns[max_error+1];
+ for (i=0;i<max_error;i++)
+ {
+  patterns[i] = (char *)malloc(sizeof(char)*(div_pattern_length+1)); 
+  memcpy( patterns[i], &pattern[i*div_pattern_length], div_pattern_length);
+  patterns[i][div_pattern_length]= '\0';
+ } 
+ j = pattern_length-i*div_pattern_length;
+ patterns[i] = (char *)malloc(sizeof(char)*(j+1)); 
+ memcpy( patterns[i], &pattern[i*div_pattern_length], j);
+ patterns[i][j]= '\0';
+
+ for (i=max_error;i>=0;i--)
+ {
+  printf("%d. vzor je %s\n",i,patterns[i]);
+  result = search_pattern(fm_index,patterns[i]);
+  printf("pozicie su %d az %d\n",result[0],result[1]);
+ }
+return result;
+}
+

@@ -14,7 +14,7 @@ int main(void)
  int i,j;
  int *suffix_array = NULL;
  int *sample_SA = NULL;
- char *s = "AACGATAACGATAACGATTGACAGTA$";
+ char *s = "AACGATAACGATAACGATTGACACGTAGTA$";
  char *bwt = NULL;
  unsigned char *bitvector;
  unsigned int *bitvector_length;
@@ -34,7 +34,7 @@ int main(void)
  //create suffix array and bwt of genome
  suffix_array = init_suffix_array(suffix_array,s, genome_length);
  bwt = create_bwt(suffix_array,s,genome_length);
- //free(genome);
+ //free(s);
  
  //count if sample sizes are high enough so occ table can fit in memory TO DO
  //build FMIndex and free suffix_array AND GENOME (to do)
@@ -52,14 +52,15 @@ int main(void)
  //s = move_to_front_decode(FM_index->alphabet,*bitvector_length,bitvector);
 
  //app matching:
- int*result = search_pattern(FM_index,"ACG");
- result[0] = 0;
- result[1] = 26;
+ int*result = approximate_search(2,FM_index,"ACGAAACGATT");
+ 
+ /*printf("results: %d %d\n",result[0],result[1]);
  while (result[0]<=result[1])
  {
  printf("sa value %d je %d\n",result[0],get_SA_value(result[0],FM_index->bwt[result[0]],FM_index));
  result[0]++;
- }
+ }*/
+
 // read sequence R one by one
 // according to error E
 // parse sequence R to E+1 sequences r1... non-overlapping
