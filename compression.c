@@ -59,7 +59,7 @@ char *move_to_front_decode (char *alphabet, unsigned int bitvector_length,unsign
  struct symbol_table *current;
  int i, index;
  unsigned char shift, start;
- unsigned char bits_per_char = get_min_bits_per_char(front);
+ unsigned char bits_per_char = get_min_bits_per_char(alphabet);
  unsigned char code, next_code;
  int wrong_pos = wrong_pos = 8 - bits_per_char + 1;
  for (i=0;i<bitvector_length;i=i+bits_per_char)
@@ -100,17 +100,11 @@ struct symbol_table *decode(struct symbol_table *front, unsigned char code)
  return current;
 }
 
-unsigned char get_min_bits_per_char(struct symbol_table *front)
+unsigned char get_min_bits_per_char(char *alphabet)
 {
-unsigned int symbols_count = 1;
+unsigned int symbols_count = strlen(alphabet);
 unsigned int i = 2;
 unsigned int j = 1;
-struct symbol_table*current = front;
-while (current->next!=NULL)
- {
-  symbols_count++;
-  current = current->next;
- }
  while (symbols_count>=i)
  {
   j++;
@@ -118,35 +112,22 @@ while (current->next!=NULL)
  }
  return j;
 }
-unsigned char* move_to_front_encode (char *alphabet, char *s, unsigned int *bitvector_length)
+
+void move_to_front_encode (char *alphabet, char *s)
 {
- unsigned char*bitvector = NULL;
- unsigned char bits_per_char;
- int symbols_count = 1;
- int i = 2;
- unsigned int j = 1;
- int k;
+ unsigned char*mtfcode = NULL;
  unsigned char count;
- unsigned char remainder;
- int string_length = strlen(s);
- int needed_bytes;
- int byte_index;
- int in_byte;
- int wrong_pos;
+ int i;
  struct symbol_table *front = build_symbol_table(alphabet);
  struct symbol_table *current = front;
- bits_per_char = get_min_bits_per_char(front);
- wrong_pos = 8 - bits_per_char + 1;
- *bitvector_length = bits_per_char*string_length;
- needed_bytes = bits_per_char*string_length/8 + 1;
- bitvector = (unsigned char *)malloc(needed_bytes); 
- if (bitvector==NULL)
+ int string_length = strlen(s);
+ /*mtfcode = (unsigned char *)malloc(string_length); 
+ if (mtfcode==NULL)
  {
   printf("Error when allocating memory for bitvector in MTF\n");
   exit(1);
- }
+ }*/
  //for each character in string
- j = 0;
  for (i=0;i<string_length;i++)
  {
   count = 0;
@@ -156,6 +137,38 @@ unsigned char* move_to_front_encode (char *alphabet, char *s, unsigned int *bitv
    current = current->next;
    count++;
   }
+  s[i] = count;
+  printf("%d",s[i]);
+  if (count != 0)
+   front = push_to_front(front,current);
+ }
+ printf("\n");
+}
+
+unsigned char *arithmetic_encode (unsigned int *bitvector_length, char *s, char * alphabet)
+{
+ unsigned char*bitvector = NULL;
+ unsigned char remainder;
+ unsigned char count;
+ unsigned char bits_per_char = get_min_bits_per_char(alphabet);
+ int i,j,k;
+ int string_length = strlen(s);
+ int needed_bytes = bits_per_char*string_length/8 + 1;;
+ int byte_index;
+ int in_byte;
+ int wrong_pos = 8 - bits_per_char + 1;
+ *bitvector_length = bits_per_char*string_length;
+ bitvector = (unsigned char *)malloc(needed_bytes); 
+ if (bitvector==NULL)
+ {
+  printf("Error when allocating memory for bitvector\n");
+  exit(1);
+ }
+ //for each character in string
+ j = 0;
+ for (i=0;i<string_length;i++)
+ {
+  count = s[i];
   byte_index = j/8;
   in_byte = j%8;
   if (in_byte<wrong_pos)
@@ -174,8 +187,6 @@ unsigned char* move_to_front_encode (char *alphabet, char *s, unsigned int *bitv
    bitvector[byte_index + 1] = bitvector[byte_index + 1] + remainder;
   }
   j = j + bits_per_char;
-  if (count != 0)
-   front = push_to_front(front,current);
  } 
  in_byte = j%8;
  byte_index = j/8;

@@ -305,3 +305,180 @@ unsigned int*approximate_search(int max_error, struct FMIndex *fm_index, char *p
 return result;
 }
 
+int calculate(int i, int j, int k)
+{
+ int ret_value;
+ if (i>j)
+  if (i>k)
+   ret_value = i;
+  else 
+   ret_value = k;
+ else
+  if (j>k) 
+   ret_value = j;
+  else
+   ret_value = k;
+ if (ret_value<0)
+  return 0;
+ else
+  return ret_value;
+}
+
+int score(char a, char b)
+{
+  if (a==b)
+    return 1;
+  else 
+    return -1;
+}
+
+int get_max_array(unsigned char* array, unsigned int length)
+{
+ int i, max = 0, maxIndex = 0;
+ for (i=0;i<length;i++) 
+ {
+  if (array[i]>max)
+  {
+    max = array[i];
+    maxIndex = i;
+  }
+ }
+ return maxIndex;
+}
+
+unsigned char get_nearest_max(unsigned char i, unsigned char j, unsigned char k)
+{
+ if (i>=j)
+  if (i>=k)
+   return 1;
+  else 
+   return 3;
+ else
+  if (j>=k) 
+   return 2;
+  else
+   return 3;
+}
+
+void align(char *p1, char*p2, int error)
+{
+ unsigned char **matrix;
+ unsigned int corrects;
+ unsigned int alignment_length;
+ char *alignment1;
+ char *alignment2;
+ int i,j;
+ unsigned int nearestMax;
+ unsigned int currentX, currentY;
+ unsigned int p1length = strlen(p1), p2length = strlen(p2);
+ 
+ //alignment = (char *) malloc((p1length+error+1)*sizeof(char));
+ 
+ matrix = (unsigned char **) malloc(sizeof(unsigned char*) * (p1length + 1));
+ for (i=0;i<=p1length;i++)
+  matrix[i] = (unsigned char *) calloc(p2length + 1,sizeof(unsigned char)); 
+ for (i=0;i<=error;i++)
+  matrix[0][i] = 0;
+ for (i=0;i<=error;i++)
+  matrix[i][0] = 0;
+ 
+ for (i=1;i<=error;i++){
+  for (j=1;j<=i+error;j++){
+   matrix[i][j] = calculate(matrix[i-1][j-1] + score(p1[i-1],p2[j-1]),matrix[i-1][j] - 1,matrix[i][j-1] - 1);
+   printf(" %d ",matrix[i][j]);
+  }
+  printf("\n");
+}
+ for (i=1+error;i<=p1length;i++){
+  for (j=i-error;j<=i+error;j++){
+    matrix[i][j] = calculate(matrix[i-1][j-1] + score(p1[i-1],p2[j-1]),matrix[i-1][j] - 1,matrix[i][j-1] - 1);
+    printf(" %d ",matrix[i][j]);
+   }
+  printf("\n");
+}
+ corrects = get_max_array(&matrix[p1length][p1length-error],2*error+1);
+ corrects = corrects+p1length-error;
+ if (p1length-error>matrix[p1length][corrects])
+  printf("No alignment found\n");
+ else
+ {
+   alignment_length = p1length+(p1length - matrix[p1length][corrects])+1;
+   alignment1 = (char *) malloc(alignment_length*sizeof(char));
+   alignment2 = (char *) malloc(alignment_length*sizeof(char));
+   alignment1[alignment_length-1] = '\0';
+   alignment2[alignment_length-1] = '\0';
+   currentY = corrects;
+   currentX = p1length;
+   for (i = alignment_length-2;i>0;i--)
+   {
+    if (currentX==0 || currentY==0)
+      break;
+    nearestMax = get_nearest_max(matrix[currentX-1][currentY-1],matrix[currentX-1][currentY],matrix[currentX][currentY-1]);
+    //if (matrix[currentX][currentY]-1 == matrix[currentX-1][currentY-1]) || (matrix[currentX][currentY]+1 == matrix[currentX-1][currentY-1])
+    if (nearestMax==1){
+      alignment1[i] = p1[currentX-1];
+      alignment2[i] = p2[currentY-1];
+      currentX = currentX - 1;
+      currentY = currentY - 1; 
+    }
+    else if (nearestMax==2){
+      //printf("nearestMax2 je %d\n",matrix[currentX-1][currentY]);
+      if (matrix[currentX-1][currentY]-1 == matrix[currentX][currentY]){
+       alignment1[i] = p1[currentX-1];
+       alignment2[i] = '-';
+       currentX = currentX - 1;
+      }
+      else
+      {
+       //printf("cant get there %d %d\n",currentX,currentY);
+       alignment1[i] = p1[currentX-1];
+       alignment2[i] = p2[currentY-1];
+       currentX = currentX - 1;
+       currentY = currentY - 1; 
+      }
+    }
+    else{
+      //printf("nearestMax3 je %d\n",matrix[currentX][currentY-1]);
+      if (matrix[currentX][currentY-1]-1 == matrix[currentX][currentY]){
+       alignment1[i] = '-';
+       alignment2[i] = p2[currentY-1];
+       currentY = currentY - 1;
+      }
+      else
+      {
+       //printf("cant get there %d %d\n",currentX,currentY);
+       alignment1[i] = p1[currentX-1];
+       alignment2[i] = p2[currentY-1];
+       currentX = currentX - 1;
+       currentY = currentY - 1; 
+      }
+    }
+
+   }
+   printf("%d i je %d, c %d %d\n",nearestMax,i,currentX,currentY);
+   if (currentX==1)
+   {
+    if (currentY==1){
+     alignment1[i] = p1[0];
+     alignment2[i] = p2[0];
+    }
+    else{
+     alignment1[i] = p1[0];
+     alignment2[i] = '-';
+    }
+   }
+   else if (currentY==1)
+   {
+    alignment1[i] = '-';
+    alignment2[i] = p2[0];
+   } 
+   while (i>=0){
+    alignment1[i] = ' ';
+    alignment2[i] = ' ';
+    i--;
+   }
+   printf("%s\n",alignment1);
+   printf("%s\n",alignment2);
+   printf("errors: %d\n",alignment_length - p1length-1);
+ }
+}

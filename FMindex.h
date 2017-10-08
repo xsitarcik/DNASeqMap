@@ -27,3 +27,7 @@ void print_count_table(struct FMIndex *fm_index);
 void print_info_fm_index(struct FMIndex *fm_index);
 unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern);
 unsigned int*approximate_search(int max_error, struct FMIndex *fm_index, char *pattern);
+int score(char a, char b);
+void align(char *p1, char*p2, int error);
+int calculate(int i, int j, int k);
+int get_max_array(unsigned char* array, unsigned int length);

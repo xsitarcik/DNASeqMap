@@ -6,7 +6,7 @@
 #include "compression.h"
 
 int genome_length;
-int sample_OCC_size = 8;
+int sample_OCC_size = 12;
 int sample_SA_size = 4;
 
 int main(void)
@@ -14,7 +14,7 @@ int main(void)
  int i,j;
  int *suffix_array = NULL;
  int *sample_SA = NULL;
- char *s = "AACGATAACGATAACGATTGACACGTAGTA$";
+ char *s = "AACGATAACCAGAGTGAGATTAACGATTGTACACGAATAGGACGTATCTGGAA$";
  char *bwt = NULL;
  unsigned char *bitvector;
  unsigned int *bitvector_length;
@@ -45,15 +45,20 @@ int main(void)
  printf("Org string is: %s\n",s);
  print_info_fm_index(FM_index);
  
- //printf("----MTF Encoding----\n");
- //bitvector_length = (int*) malloc(sizeof(int));
- //bitvector = move_to_front_encode(FM_index->alphabet,FM_index->bwt,bitvector_length);
- //print_bit_vector(bitvector, *bitvector_length);
+ printf("----MTF Encoding----\n");
+ bitvector_length = (int*) malloc(sizeof(int));
+ move_to_front_encode(FM_index->alphabet,FM_index->bwt);
+ bitvector = arithmetic_encode(bitvector_length,FM_index->bwt,FM_index->alphabet);
+ print_bit_vector(bitvector, *bitvector_length);
  //s = move_to_front_decode(FM_index->alphabet,*bitvector_length,bitvector);
 
  //app matching:
- int*result = approximate_search(2,FM_index,"ACGAAACGATT");
+ //int*result = approximate_search(2,FM_index,"ACGAAACGATT");
  
+ //align("TGTTAC","GGTTGAC", 2);
+ 
+
+
  /*printf("results: %d %d\n",result[0],result[1]);
  while (result[0]<=result[1])
  {
