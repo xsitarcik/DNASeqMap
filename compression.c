@@ -145,18 +145,18 @@ void move_to_front_encode (char *alphabet, char *s)
  printf("\n");
 }
 
-unsigned char *arithmetic_encode (unsigned int *bitvector_length, char *s, char * alphabet)
+unsigned char *arithmetic_encode (unsigned int *bitvector_length, char *s, char * alphabet, unsigned int string_length)
 {
  unsigned char*bitvector = NULL;
  unsigned char remainder;
  unsigned char count;
  unsigned char bits_per_char = get_min_bits_per_char(alphabet);
  int i,j,k;
- int string_length = strlen(s);
  int needed_bytes = bits_per_char*string_length/8 + 1;;
  int byte_index;
  int in_byte;
  int wrong_pos = 8 - bits_per_char + 1;
+ printf("bits per char %d, string_length %d\n",bits_per_char, string_length);
  *bitvector_length = bits_per_char*string_length;
  bitvector = (unsigned char *)malloc(needed_bytes); 
  if (bitvector==NULL)
@@ -222,6 +222,45 @@ void print_bit_vector(unsigned char *bitvector, unsigned int bitvector_length)
   printf(" ");
  }
  printf("\n");
+}
+
+unsigned char* zero_runs_encode(unsigned char *s, unsigned int *string_length)
+{
+ unsigned int i = 0;
+ unsigned int j = 0;
+ unsigned char *encoded = (unsigned char*) malloc(*string_length);
+ unsigned int cmp = *string_length-1;
+ unsigned char previous = s[0];
+ unsigned char counter = 0;
+ printf("hodnota stringlenght je %d\n",*string_length);
+ while(i<=cmp)
+ {
+  counter = 0;  
+  while (s[i]==0 && i!=cmp)
+  {
+   counter++;
+   i++;
+  }
+  if (counter!=0)
+  {
+   encoded[j] = 0;
+   j++;
+   encoded[j] = counter;
+   j++;
+  }
+  else 
+  {
+   encoded[j] = s[i];
+   j++;
+   i++;
+  }
+ }
+ encoded = (unsigned char *)realloc(encoded,j);
+ printf("usetrilo sa %d bytov\n",*string_length-j);
+ *string_length = j;
+ printf("hodnota stringlenght je %d\n",*string_length);
+ free(s);
+ return encoded;
 }
 
 

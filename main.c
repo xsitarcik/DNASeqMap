@@ -47,9 +47,16 @@ int main(void)
  
  printf("----MTF Encoding----\n");
  bitvector_length = (int*) malloc(sizeof(int));
+ 
  move_to_front_encode(FM_index->alphabet,FM_index->bwt);
- bitvector = arithmetic_encode(bitvector_length,FM_index->bwt,FM_index->alphabet);
- print_bit_vector(bitvector, *bitvector_length);
+ printf("stara dlzka je %d\n",FM_index->length);
+ FM_index->bwt = zero_runs_encode(FM_index->bwt, &FM_index->length);
+ printf("nova dlzka je %d\n",FM_index->length);
+ for (i=0;i<FM_index->length;i++)
+ 	printf("%d",FM_index->bwt[i]);
+ //bitvector = arithmetic_encode(bitvector_length,FM_index->bwt,FM_index->alphabet,FM_index->length);
+ //printf("bitvector length je %d\n",*bitvector_length);
+ //print_bit_vector(bitvector, *bitvector_length);
  //s = move_to_front_decode(FM_index->alphabet,*bitvector_length,bitvector);
 
  //app matching:
@@ -71,7 +78,7 @@ int main(void)
 // parse sequence R to E+1 sequences r1... non-overlapping
 // each r1... sequence locate with help of FM-INDEX
 
- free(bwt);
+ //free(bwt);
 
 return 0;
 }
