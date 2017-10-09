@@ -115,18 +115,11 @@ unsigned int j = 1;
 
 void move_to_front_encode (char *alphabet, char *s)
 {
- unsigned char*mtfcode = NULL;
  unsigned char count;
  int i;
  struct symbol_table *front = build_symbol_table(alphabet);
  struct symbol_table *current = front;
  int string_length = strlen(s);
- /*mtfcode = (unsigned char *)malloc(string_length); 
- if (mtfcode==NULL)
- {
-  printf("Error when allocating memory for bitvector in MTF\n");
-  exit(1);
- }*/
  //for each character in string
  for (i=0;i<string_length;i++)
  {
@@ -196,6 +189,28 @@ unsigned char *arithmetic_encode (unsigned int *bitvector_length, char *s, char 
  return bitvector;
 }
 
+unsigned char get_index_in_alphabet(char *alphabet, char c)
+{
+ unsigned char i = 0;
+ while(c!=alphabet[i])
+  i++;
+ return i;
+}
+
+void alphabet_encode (char *s, char * alphabet)
+{
+ unsigned char count;
+ unsigned int string_length = strlen(s);
+ unsigned int i;
+ for (i=0;i<string_length;i++)
+ {
+  count = get_index_in_alphabet(alphabet,s[i]);
+  s[i] = count;
+  printf("%d",s[i]);
+ }
+ printf("\n");
+}
+
 unsigned char get_set_bits(unsigned char bits)
 {
  int i;
@@ -228,8 +243,8 @@ unsigned char* zero_runs_encode(unsigned char *s, unsigned int *string_length)
 {
  unsigned int i = 0;
  unsigned int j = 0;
- unsigned char *encoded = (unsigned char*) malloc(*string_length);
  unsigned int cmp = *string_length-1;
+ unsigned char *encoded = (unsigned char*) malloc(cmp*2*sizeof(char));
  unsigned char previous = s[0];
  unsigned char counter = 0;
  printf("hodnota stringlenght je %d\n",*string_length);
@@ -255,7 +270,10 @@ unsigned char* zero_runs_encode(unsigned char *s, unsigned int *string_length)
    i++;
   }
  }
- encoded = (unsigned char *)realloc(encoded,j);
+ printf("encoded[j] %d\n",encoded[j-1]);
+ printf("finne %d %d\n",j,*string_length); 
+ if (j!=*string_length)
+  encoded = (unsigned char *)realloc(encoded,j);
  printf("usetrilo sa %d bytov\n",*string_length-j);
  *string_length = j;
  printf("hodnota stringlenght je %d\n",*string_length);

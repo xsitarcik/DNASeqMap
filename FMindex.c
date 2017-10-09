@@ -117,7 +117,7 @@ int **create_occurence_table(char *s, int string_length, char *alphabet, int sam
  int **occurence_table = (int **)malloc(alphabet_size*sizeof(int*));
  for (i=0;i<alphabet_size;i++)
  {
-  occurence_table[i] = (int *)malloc(samples_count*sizeof(int));
+  occurence_table[i] = (int *)malloc((samples_count+1)*sizeof(int));
   if (occurence_table[i]==NULL)
   {
    printf("Error. No memory when allocating occurence table\n");

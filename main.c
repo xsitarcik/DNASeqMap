@@ -7,19 +7,21 @@
 
 int genome_length;
 int sample_OCC_size = 12;
-int sample_SA_size = 4;
+int sample_SA_size = 1;
+unsigned char flag_zero_runs = 0;
+unsigned char flag_mtf = 0;
 
 int main(void)
 {
  int i,j;
  int *suffix_array = NULL;
  int *sample_SA = NULL;
- char *s = "AACGATAACCAGAGTGAGATTAACGATTGTACACGAATAGGACGTATCTGGAA$";
+ char *s = "CGGGAGTAGCAGAGAAGACGCCTACTGAATTGTGCGATCCCTG";
  char *bwt = NULL;
  unsigned char *bitvector;
  unsigned int *bitvector_length;
  struct FMIndex *FM_index;
- char *alphabet = "$ACGT";
+ char *alphabet = "ACGT";
  //load genome
  //appendovanie $
  //abeceda
@@ -45,15 +47,31 @@ int main(void)
  printf("Org string is: %s\n",s);
  print_info_fm_index(FM_index);
  
- printf("----MTF Encoding----\n");
- bitvector_length = (int*) malloc(sizeof(int));
- 
- move_to_front_encode(FM_index->alphabet,FM_index->bwt);
- printf("stara dlzka je %d\n",FM_index->length);
- FM_index->bwt = zero_runs_encode(FM_index->bwt, &FM_index->length);
- printf("nova dlzka je %d\n",FM_index->length);
- for (i=0;i<FM_index->length;i++)
- 	printf("%d",FM_index->bwt[i]);
+ bitvector_length = (int*) malloc(sizeof(int)*1);
+ if (bitvector_length==NULL)
+ {
+ 	printf("Error when allocating\n");
+ 	exit(1);
+ }
+ if (flag_mtf)
+ {
+  printf("----MTF Encoding----\n");
+  move_to_front_encode(FM_index->alphabet,FM_index->bwt);
+ }
+ else
+ {
+  printf("----Alphabet Encoding----\n");
+  alphabet_encode(FM_index->bwt,FM_index->alphabet);
+ }
+ if (flag_zero_runs)
+ {
+  printf("----Zero Runs Encoding----\n");
+  printf("original length is %d\n",FM_index->length);
+  FM_index->bwt = zero_runs_encode(FM_index->bwt, &FM_index->length);
+  printf("new length is %d\n",FM_index->length);
+  for (i=0;i<FM_index->length;i++)
+   printf("%d",FM_index->bwt[i]);
+ }
  //bitvector = arithmetic_encode(bitvector_length,FM_index->bwt,FM_index->alphabet,FM_index->length);
  //printf("bitvector length je %d\n",*bitvector_length);
  //print_bit_vector(bitvector, *bitvector_length);

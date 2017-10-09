@@ -15,3 +15,5 @@ void print_bit_vector(unsigned char *bitvector, unsigned int bitvector_length);
 struct symbol_table *decode(struct symbol_table *front, unsigned char code);
 unsigned char *arithmetic_encode (unsigned int *bitvector_length, char *s, char * alphabet, unsigned int string_length);
 unsigned char* zero_runs_encode(unsigned char *s, unsigned int *string_length);
+unsigned char get_index_in_alphabet(char *alphabet, char c);
+void alphabet_encode (char *s, char * alphabet);
