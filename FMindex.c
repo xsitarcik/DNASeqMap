@@ -149,18 +149,20 @@ int count_occ(char *s, int **occurence_table, int position, char c, int characte
  //kde je blizsie
  int a = position/sample_size;
  int bound = position - (a * sample_size);
- //printf("dolne bound je %d\n",bound);
+ //printf("dolne bound je %d, pos je %d\n",bound,position);
  while (bound>0)
  {
   bound--;
   position--;
-  //printf("znak %c %c, akt count je %d\n",s[position],c,count);
+  //printf("pos %d znak %c %c, akt count je %d\n",position, s[position],c,count);
   if (s[position]==c)
    count++;
  }
+ //printf("count je %d, position je %d\n",count,position);
  if (s[position]==c)
    count--;
  //printf("do %d je pocet %c rovny %d, count=%d occ=%d\n",position,c,occurence_table[character][position/sample_size]+count,occurence_table[character][position/sample_size],count);
+ //printf("vraciam %d + %d\n",occurence_table[character][position/sample_size],count);
  return occurence_table[character][position/sample_size]+count;
 }
 

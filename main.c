@@ -6,8 +6,8 @@
 #include "compression.h"
 
 int genome_length;
-int sample_OCC_size = 12;
-int sample_SA_size = 1;
+int sample_OCC_size = 8;
+int sample_SA_size = 4;
 unsigned char flag_zero_runs = 0;
 unsigned char flag_mtf = 0;
 
@@ -16,7 +16,7 @@ int main(void)
  int i,j;
  int *suffix_array = NULL;
  int *sample_SA = NULL;
- char *s = "CGGGAGTAGCAGAGAAGACGCCTACTGAATTGTGCGATCCCTG";
+ char *s = "CGGGAGTAGCAGAGAAGACGCCTACTA";
  char *bwt = NULL;
  unsigned char *bitvector;
  unsigned int *bitvector_length;

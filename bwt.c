@@ -28,34 +28,84 @@ int max(int number1, int number2)
  else
   return number1;
 }
+int min(int number1, int number2)
+{
+ if (number1 > number2)
+  return number2;
+ else
+  return number1;
+}
+
 
 //helper function used when sorting rotations
 int compare_rotations(char *s, int start1, int start2, int genome_length)
 {
- int rotation_break = max(start1,start2);
- int i = rotation_break;
+ int rotation_break1 = max(start1,start2) - min(start1,start2);
+ int rotation_break2 = min(start1,start2);
+ int real_length = genome_length - 1;
+ //printf("starty %d %d, rotbreak %d\n", start1,start2,rotation_break);
  int origin1 = start1;
  int origin2 = start2;
- while (i!=genome_length && s[start1]==s[start2])
+ int i = max(start1,start2);
+ while (i!=real_length && s[start1]==s[start2])
  {
   i++;
   start1++;
   start2++;
  }
+ //printf("po prvom cykle starty %d %d a c %c %c, i %d\n", start1,start2,s[start1],s[start2],i);
  if (s[start1]==s[start2])
  {
   i = 0;
-  while (i!=rotation_break && s[start1]==s[start2])
+  if (start1>start2)
+  {
+   start1 = 0;
+   start2++;
+  }
+  else 
+  {
+   start1++;
+   start2 = 0;
+  }
+  //printf("zacinam porovnavat na indexoch %d %d\n",start1,start2);
+  while (i!=rotation_break1 && s[start1]==s[start2])
   {
    i++;
    start1++;
    start2++;
   }
+  if (i == rotation_break1)
+  {
+   if (start1>start2)
+    start1 = 0;
+   else 
+    start2 = 0;
+   i = 0;
+   while (i!=rotation_break2 && s[start1]==s[start2])
+   {
+    i++;
+    start1++;
+    start2++;
+   }
+   if (s[start1]<s[start2])
+    return origin1;
+   else 
+    return origin2;
+  }
+  else {
+   if (s[start1]<s[start2])
+    return origin1;
+   else 
+    return origin2;
+  }
  }
- if (s[start1]<s[start2])
-  return origin1;
  else 
-  return origin2;
+  {
+   if (s[start1]<s[start2])
+    return origin1;
+   else 
+    return origin2;
+  }
 }
 
 int *insertion_sort_array(int *suffix_array, char *s, int genome_length)
