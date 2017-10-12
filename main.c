@@ -47,6 +47,15 @@ int main(void)
  printf("Org string is: %s\n",s);
  print_info_fm_index(FM_index);
  
+
+ int*result = search_pattern(FM_index,"CAGAGCAA");
+ printf("results: %d %d\n",result[0],result[1]);
+ while (result[0]<result[1])
+ {
+ printf("sa value %d je %d\n",result[0],get_SA_value(result[0],FM_index->bwt[result[0]],FM_index));
+ result[0]++;
+ }
+
  bitvector_length = (int*) malloc(sizeof(int)*1);
  if (bitvector_length==NULL)
  {
