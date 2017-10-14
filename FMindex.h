@@ -4,14 +4,19 @@ struct FMIndex
  int sample_SA_size;
  int sample_OCC_size;
  char *alphabet;
+ unsigned char flag_mtf;
+ unsigned flag_zero_runs;
+ unsigned flag_huffman;
  int end;
  int *sampleSA;
  int *count_table;
  int **occurence_table;
  char *bwt;
+ unsigned char alphabetically_encoded;
 };
 
-struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet);
+struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet, 
+  unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman);
 int find_end(int *suffix_array);
 int *create_sample_SA(int *suffix_array,int sample_size, int array_size);
 int *create_count_table(char *s, int string_length, char* alphabet);
@@ -31,3 +36,4 @@ int score(char a, char b);
 void align(char *p1, char*p2, int error);
 int calculate(int i, int j, int k);
 int get_max_array(unsigned char* array, unsigned int length);
+int last_to_first_encoded(char c, int bwt_position, struct FMIndex *fm_index);

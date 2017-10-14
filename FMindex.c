@@ -2,20 +2,27 @@
 #include <stdlib.h>
 #include <string.h>
 #include "FMindex.h"
+#include "compression.h"
 
-struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet)
+struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet, 
+  unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman)
 {
  struct FMIndex *FM_index = (struct FMIndex*) malloc(sizeof(struct FMIndex));
  FM_index->bwt = bwt;
  FM_index->sample_SA_size = sample_SA_size;
  FM_index->sample_OCC_size = sample_OCC_size;
  FM_index->alphabet = alphabet;
+ FM_index->flag_mtf = flag_mtf;
+ FM_index->flag_zero_runs = flag_zero_runs;
+ FM_index->flag_huffman = flag_huffman;
  FM_index->length = genome_length;
  FM_index->end = find_end(suffix_array);
  FM_index->sampleSA = create_sample_SA(suffix_array,sample_SA_size,genome_length);
  free(suffix_array);
  FM_index->count_table = create_count_table(bwt,genome_length,alphabet);
  FM_index->occurence_table = create_occurence_table(bwt,genome_length,alphabet,sample_OCC_size);
+ FM_index->alphabetically_encoded  = 0;
+ FM_index->bwt = compress(flag_mtf,flag_zero_runs,flag_huffman,alphabet,bwt,&FM_index->length,&FM_index->alphabetically_encoded);
  return FM_index;
 }
 
@@ -52,22 +59,29 @@ int get_SA_value(int bwt_position, char c, struct FMIndex *fm_index)
 {
  //printf("%c znak\n",c);
  int count = 0;
- int character = get_alphabet_index(fm_index->alphabet,c);
+ int  character;
+ if (fm_index->alphabetically_encoded == 1)
+  character = c;
+ else
+  character = get_alphabet_index(fm_index->alphabet,c);
  while(bwt_position%fm_index->sample_SA_size!=0)
  {
   c = fm_index->bwt[bwt_position];
   //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
-  bwt_position = last_to_first(c, bwt_position, fm_index);
+  bwt_position = last_to_first_encoded(c, bwt_position, fm_index);
   count++;
  }
  //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
+ int result = fm_index->sampleSA[bwt_position/fm_index->sample_SA_size]+count;
+ if (result>fm_index->length)
+  result = result - fm_index->length;
  /*if (!(bwt_position)){
   if (count)
     return --count;
   else 
     return count;
 }*/
- return (fm_index->sampleSA[bwt_position/fm_index->sample_SA_size]+count);
+ return result;
 }
 
 int last_to_first(char c, int bwt_position, struct FMIndex *fm_index)
@@ -77,6 +91,15 @@ int last_to_first(char c, int bwt_position, struct FMIndex *fm_index)
  //printf("predchodca rotacie %d je %d\n",bwt_position,last);
  return last;
 }
+
+int last_to_first_encoded(char c, int bwt_position, struct FMIndex *fm_index)
+{
+ int character = c;
+ int last = fm_index->count_table[character] + count_occ(fm_index->bwt,fm_index->occurence_table,bwt_position,c,character,fm_index->sample_OCC_size);
+ //printf("predchodca rotacie %d je %d\n",bwt_position,last);
+ return last;
+}
+
 
 int *create_count_table(char *s, int string_length, char* alphabet)
 {
@@ -166,6 +189,16 @@ int count_occ(char *s, int **occurence_table, int position, char c, int characte
  return occurence_table[character][position/sample_size]+count;
 }
 
+void alphabet_decode (char *s, char * alphabet)
+{
+ unsigned int string_length = strlen(s);
+ unsigned int i;
+ for (i=0;i<string_length;i++)
+ {
+  s[i] = alphabet[s[i]];
+ }
+}
+
 char *reverseBWT(struct FMIndex *fm_index)
 {
  int i = 0;
@@ -178,12 +211,26 @@ char *reverseBWT(struct FMIndex *fm_index)
   printf("Error. No memory when allocating memory when reversing string\n");
   exit(1);
  }
- while (i++!=fm_index->length)
+ if (fm_index->alphabetically_encoded == 0)
  {
-  a = fm_index->bwt[end];
-  reversed[j] = a;
-  j--;
-  end = last_to_first(a,end,fm_index);
+  while (i++!=fm_index->length)
+  {
+   a = fm_index->bwt[end];
+   reversed[j] = a;
+   j--;
+   end = last_to_first(a,end,fm_index);
+  }
+ }
+ else
+ {
+  while (i++!=fm_index->length)
+  {
+   a = fm_index->bwt[end];
+   reversed[j] = a;
+   j--;
+   end = last_to_first_encoded(a,end,fm_index);
+  }
+  alphabet_decode(reversed, fm_index->alphabet);
  }
 return reversed;
 }
@@ -255,7 +302,7 @@ unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern)
  unsigned int pattern_length = strlen(pattern);
  int j = pattern_length - 1;
  int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
- //printf("prvy znak %c index %d\n",pattern[j],alphabet_index);
+ printf("prvy znak %c index %d\n",pattern[j],alphabet_index);
  result[0] = count_table[alphabet_index];
  if (alphabet_index!=alphabet_size)
   result[1] = count_table[alphabet_index + 1]-1;
@@ -267,23 +314,23 @@ unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern)
   j--;
   alphabet_index = get_alphabet_index(alphabet,pattern[j]);
   //printf("%d-ty znak %c index %d\n",j,pattern[j],alphabet_index);
-  result[0] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[0],pattern[j],alphabet_index,fm_index->sample_OCC_size);
-  result[1] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[1],pattern[j],alphabet_index,fm_index->sample_OCC_size);
+  result[0] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[0],alphabet_index,alphabet_index,fm_index->sample_OCC_size);
+  result[1] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[1],alphabet_index,alphabet_index,fm_index->sample_OCC_size);
  
- int test = result[0];
+ /*int test = result[0];
  printf("-----------------------------\n");
  while (test<result[1])
  {
  printf("sa value %d je %d\n",test,get_SA_value(test,fm_index->bwt[result[0]],fm_index));
  test++;
  }
-
+ */
  printf("rozsah je %d az %d \n",result[0],result[1]);
 
  }
  if (j>0 && result[0]>=result[1])
   result[1]--;
- printf("vraciam %d %d\n",result[0],result[1]);
+ //printf("vraciam %d %d\n",result[0],result[1]);
  return result;
 }
 
