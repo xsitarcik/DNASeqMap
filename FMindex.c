@@ -4,17 +4,15 @@
 #include "FMindex.h"
 #include "compression.h"
 
-struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet, 
-  unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman)
+struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet)
 {
+  unsigned char bits_per_char = get_min_bits_per_char(alphabet);
+  printf("%s\n",bwt);
  struct FMIndex *FM_index = (struct FMIndex*) malloc(sizeof(struct FMIndex));
  FM_index->bwt = bwt;
  FM_index->sample_SA_size = sample_SA_size;
  FM_index->sample_OCC_size = sample_OCC_size;
  FM_index->alphabet = alphabet;
- FM_index->flag_mtf = flag_mtf;
- FM_index->flag_zero_runs = flag_zero_runs;
- FM_index->flag_huffman = flag_huffman;
  FM_index->length = genome_length;
  FM_index->end = find_end(suffix_array);
  FM_index->sampleSA = create_sample_SA(suffix_array,sample_SA_size,genome_length);
@@ -22,8 +20,32 @@ struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_
  FM_index->count_table = create_count_table(bwt,genome_length,alphabet);
  FM_index->occurence_table = create_occurence_table(bwt,genome_length,alphabet,sample_OCC_size);
  FM_index->alphabetically_encoded  = 0;
- FM_index->bwt = compress(flag_mtf,flag_zero_runs,flag_huffman,alphabet,bwt,&FM_index->length,&FM_index->alphabetically_encoded);
+ alphabet_encode(FM_index->bwt,alphabet,genome_length);
+ FM_index->alphabetically_encoded = 1;
+ FM_index->bwt = arithmetic_encode(FM_index->bwt,genome_length,bits_per_char,&FM_index->bitvector_length);
  return FM_index;
+}
+
+struct compressedFMIndex*build_compressed_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet, 
+  unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman, unsigned int block_size)
+{
+  printf("%s\n",bwt);
+ struct compressedFMIndex *compressed_FM_index = (struct compressedFMIndex*) malloc(sizeof(struct compressedFMIndex));
+ compressed_FM_index->sample_SA_size = sample_SA_size;
+ compressed_FM_index->block_size = block_size;
+ compressed_FM_index->alphabet = alphabet;
+ compressed_FM_index->flag_mtf = flag_mtf;
+ compressed_FM_index->flag_zero_runs = flag_zero_runs;
+ compressed_FM_index->flag_huffman = flag_huffman;
+ compressed_FM_index->length = genome_length;
+ compressed_FM_index->end = find_end(suffix_array);
+ compressed_FM_index->sampleSA = create_sample_SA(suffix_array,sample_SA_size,genome_length);
+ free(suffix_array);
+ compressed_FM_index->count_table = create_count_table(bwt,genome_length,alphabet);
+ compressed_FM_index->array_of_blocks = compress_FMIndex(block_size,flag_mtf,flag_zero_runs,flag_huffman,alphabet,bwt,&compressed_FM_index->length);
+ decompress_block(compressed_FM_index->array_of_blocks[1].bitvector_length, compressed_FM_index->array_of_blocks[1].front, compressed_FM_index->array_of_blocks[1].bitvector, compressed_FM_index->array_of_blocks[0].runs, flag_mtf, 
+  flag_zero_runs, flag_huffman, block_size, alphabet);
+ return compressed_FM_index;
 }
 
 int find_end(int *suffix_array)
@@ -286,8 +308,9 @@ void print_count_table(struct FMIndex *fm_index)
 void print_info_fm_index(struct FMIndex *fm_index)
 {
  printf("Length of BWT is: %d\n",fm_index->length);
- printf("Stored BWT is: %s\n",fm_index->bwt);
- printf("Reversed   is: %s\n",reverseBWT(fm_index));
+ //printf("Stored BWT is: %s\n",fm_index->bwt);
+ print_bit_vector(fm_index->bwt, fm_index->bitvector_length);
+ //printf("Reversed   is: %s\n",reverseBWT(fm_index));
  print_count_table(fm_index);
  print_sample_SA(fm_index);
  print_occurence_table(fm_index);

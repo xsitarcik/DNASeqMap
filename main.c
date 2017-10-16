@@ -6,10 +6,12 @@
 //#include "compression.h"
 
 int genome_length;
-int sample_OCC_size = 8;
+unsigned int block_size = 16;
+int sample_OCC_size = 12;
 int sample_SA_size = 8;
+unsigned char flag_compress = 1;
 unsigned char flag_zero_runs = 0;
-unsigned char flag_mtf = 0;
+unsigned char flag_mtf = 1;
 unsigned char flag_huffman = 0;
 
 int main(void)
@@ -20,7 +22,8 @@ int main(void)
  char *s = "AAAGGGGCTGTTAGTTATGCCCCGCGAGGATTCGAAAAGGTGAGCCAACTCGGCCGATCCGGAGAGACGGGCTTCAAAGC";
  char *bwt = NULL;
  unsigned int *bitvector_length;
- struct FMIndex *FM_index;
+ struct FMIndex *FM_index = NULL;
+ struct compressedFMIndex *compressed_FM_index = NULL;
  char *alphabet = "ACGT";
  //load genome
  //abeceda
@@ -42,46 +45,33 @@ int main(void)
  
  //count if sample sizes are high enough so occ table can fit in memory TO DO
  //build FMIndex and free suffix_array AND GENOME (to do)
- FM_index = build_FM_index(suffix_array,sample_SA_size, sample_OCC_size, genome_length,bwt,alphabet,flag_mtf, flag_zero_runs, flag_huffman);
- //free(suffix_array); 
- 
- //printing
- printf("Org string is: %s\n",s);
- print_info_fm_index(FM_index);
- 
- int*result = search_pattern(FM_index,"GGGGC");
- printf("results: %d %d\n",result[0],result[1]);
- while (result[0]<result[1])
+ if (flag_compress)
  {
-  printf("sa value %d je %d\n",result[0],get_SA_value(result[0],FM_index->bwt[result[0]],FM_index));
-  result[0]++;
- }
+  compressed_FM_index = build_compressed_FM_index(suffix_array,sample_SA_size, sample_OCC_size, genome_length,bwt,alphabet,flag_mtf, flag_zero_runs, flag_huffman, block_size);
 
+ }
+ else
+ {
+  FM_index = build_FM_index(suffix_array,sample_SA_size, sample_OCC_size, genome_length,bwt,alphabet);
+  printf("Org string is: %s\n",s);
+  print_info_fm_index(FM_index);
+
+  int*result = search_pattern(FM_index,"GGGGC");
+  printf("results: %d %d\n",result[0],result[1]);
+  while (result[0]<result[1])
+  {
+   printf("sa value %d je %d\n",result[0],get_SA_value(result[0],FM_index->bwt[result[0]],FM_index));
+   result[0]++;
+  }
+ }
  
- //FM_index->bwt = compress(flag_mtf,flag_zero_runs,flag_huffman,alphabet,bwt,&FM_index->length,&FM_index->alphabetically_encoded);
  
- //s = move_to_front_decode(FM_index->alphabet,*bitvector_length,bitvector);
 
  //app matching:
  //int*result = approximate_search(2,FM_index,"ACGAAACGATT");
  
  //align("TGTTAC","GGTTGAC", 2);
- 
 
-
- /*printf("results: %d %d\n",result[0],result[1]);
- while (result[0]<=result[1])
- {
- printf("sa value %d je %d\n",result[0],get_SA_value(result[0],FM_index->bwt[result[0]],FM_index));
- result[0]++;
- }*/
-
-// read sequence R one by one
-// according to error E
-// parse sequence R to E+1 sequences r1... non-overlapping
-// each r1... sequence locate with help of FM-INDEX
-
- //free(bwt);
 
 return 0;
 }

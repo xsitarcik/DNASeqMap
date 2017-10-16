@@ -1,12 +1,10 @@
 struct FMIndex
 {
  int length;
+ unsigned int bitvector_length;
  int sample_SA_size;
  int sample_OCC_size;
  char *alphabet;
- unsigned char flag_mtf;
- unsigned flag_zero_runs;
- unsigned flag_huffman;
  int end;
  int *sampleSA;
  int *count_table;
@@ -15,8 +13,24 @@ struct FMIndex
  unsigned char alphabetically_encoded;
 };
 
-struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet, 
-  unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman);
+struct compressedFMIndex
+{
+ int length;
+ int sample_SA_size;
+ int block_size;
+ char *alphabet;
+ unsigned char flag_mtf;
+ unsigned char flag_zero_runs;
+ unsigned char flag_huffman;
+ int end;
+ int *sampleSA;
+ int *count_table;
+ struct compressed_block *array_of_blocks;
+};
+
+struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet);
+struct compressedFMIndex*build_compressed_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet, 
+  unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman, unsigned int block_size);
 int find_end(int *suffix_array);
 int *create_sample_SA(int *suffix_array,int sample_size, int array_size);
 int *create_count_table(char *s, int string_length, char* alphabet);
