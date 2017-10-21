@@ -1,53 +1,59 @@
 struct FMIndex
 {
- int length;
+ unsigned int length;
  unsigned int bitvector_length;
- int sample_SA_size;
- int sample_OCC_size;
- char *alphabet;
- int end;
- int *sampleSA;
- int *count_table;
- int **occurence_table;
- char *bwt;
+ unsigned int sample_SA_size;
+ unsigned int sample_OCC_size;
+ unsigned char *alphabet;
+ unsigned int end;
+ unsigned int *sampleSA;
+ unsigned int *count_table;
+ unsigned int **occurence_table;
+ unsigned char *bwt;
  unsigned char alphabetically_encoded;
 };
 
 struct compressedFMIndex
 {
- int length;
- int sample_SA_size;
- int block_size;
- char *alphabet;
+ unsigned int length;
+ unsigned int sample_SA_size;
+ unsigned int block_size;
+ unsigned char *alphabet;
  unsigned char flag_mtf;
  unsigned char flag_zero_runs;
  unsigned char flag_huffman;
- int end;
- int *sampleSA;
- int *count_table;
+ unsigned int end;
+ unsigned int *sampleSA;
+ unsigned int *count_table;
  struct compressed_block *array_of_blocks;
 };
 
-struct FMIndex*build_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet);
-struct compressedFMIndex*build_compressed_FM_index(int *suffix_array, int sample_SA_size, int sample_OCC_size, int genome_length, char *bwt, char *alphabet, 
+struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned int sample_SA_size,unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet);
+struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array,unsigned int sample_SA_size, unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet, 
   unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman, unsigned int block_size);
-int find_end(int *suffix_array);
-int *create_sample_SA(int *suffix_array,int sample_size, int array_size);
-int *create_count_table(char *s, int string_length, char* alphabet);
-int get_SA_value(int bwt_position, char c, struct FMIndex *fm_index);
-int **create_occurence_table(char *s, int string_length, char *alphabet, int sample_size);
-int count_occ(char *s, int **occurence_table, int position, char c, int character, int sample_size);
-int last_to_first(char c, int bwt_position, struct FMIndex *fm_index);
-int get_alphabet_index(char *alphabet, char c);
-char *reverseBWT(struct FMIndex *fm_index);
+unsigned int find_end(unsigned int *suffix_array);
+unsigned int *create_sample_SA(unsigned int *suffix_array,unsigned int sample_size, unsigned int array_size);
+unsigned int *create_count_table(unsigned char *s, unsigned int string_length, unsigned char* alphabet);
+unsigned int get_SA_value(unsigned int bwt_position, unsigned char c, struct FMIndex *fm_index);
+unsigned int **create_occurence_table(unsigned char *s, unsigned int string_length, unsigned char *alphabet, unsigned int sample_size);
+unsigned int count_occ(unsigned char *s, unsigned int **occurence_table, unsigned int position, unsigned char c, unsigned char character, unsigned int sample_size);
+unsigned int last_to_first(unsigned char c, unsigned int bwt_position, unsigned char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table,unsigned int sample_OCC_size);
+unsigned int get_alphabet_index(unsigned char *alphabet, unsigned char c);
+unsigned char *reverseBWT(unsigned int length,  unsigned int end, unsigned char*alphabet,unsigned int*count_table,unsigned char*bwt, unsigned int**occurence_table,unsigned int sample_OCC_size,unsigned char alphabetically_encoded);
 void print_occurence_table(struct FMIndex *fm_index);
 void print_sample_SA(struct FMIndex *fm_index);
 void print_count_table(struct FMIndex *fm_index);
 void print_info_fm_index(struct FMIndex *fm_index);
 unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern);
 unsigned int*approximate_search(int max_error, struct FMIndex *fm_index, char *pattern);
-int score(char a, char b);
+unsigned int score(char a, char b);
 void align(char *p1, char*p2, int error);
-int calculate(int i, int j, int k);
-int get_max_array(unsigned char* array, unsigned int length);
-int last_to_first_encoded(char c, int bwt_position, struct FMIndex *fm_index);
+unsigned int calculate(int i, int j, int k);
+unsigned int get_max_array(unsigned char* array, unsigned int length);
+unsigned int last_to_first_encoded(unsigned char c, unsigned int bwt_position, unsigned char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table,unsigned int sample_OCC_size);
+unsigned int last_to_first_in_compressed_FMIndex(unsigned char c, unsigned int bwt_position, unsigned char*alphabet, unsigned int* count_table,struct compressed_block *block, unsigned int block_size, 
+  unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman);
+unsigned char *decompress_FMIndex(struct compressedFMIndex *compressed_FM_index);
+unsigned int count_occ_in_block(struct compressed_block *block, unsigned int position,unsigned char c,unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman, unsigned char*alphabet);
+unsigned int count_occ_in_compressed_FMIndex(struct compressed_block *block, unsigned int block_size, unsigned int position, unsigned char c, unsigned char flag_mtf, unsigned char flag_zero_runs, unsigned char flag_huffman, unsigned char*alphabet);
+unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, unsigned char*bwt,unsigned int block_size, unsigned int position, unsigned char c, unsigned char*alphabet);

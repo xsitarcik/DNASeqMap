@@ -12,24 +12,37 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
  //vypocet poctu blokov
  unsigned char bits_per_char = get_min_bits_per_char(alphabet);;
  unsigned int count_of_blocks = *length/block_size; //zvysok osetrit !
- unsigned int i,j,k, remainder;
+ unsigned int i,j,k,remainder;
  unsigned char *bitvector;
+ unsigned int *temp_array;
+ unsigned int temp_occ[strlen(alphabet)];
  struct compressed_block *array_of_blocks;
  array_of_blocks = (struct compressed_block*)malloc((count_of_blocks+1)*sizeof(struct compressed_block));
  j = 0;
  
  for (i = 0; i<count_of_blocks;i++)
  {
-  array_of_blocks[i].occurences = calc_occurences(&bwt[j],block_size,alphabet);
+  array_of_blocks[i].occurences = (unsigned int*)malloc(strlen(alphabet)*sizeof(unsigned int));
+  if (i!=0)
+  {
+    for (k=0;k<strlen(alphabet);k++)
+     array_of_blocks[i].occurences[k] = array_of_blocks[i-1].occurences[k] + temp_array[k];
+  }
+  else 
+  	for (k=0;k<strlen(alphabet);k++)
+  	 array_of_blocks[i].occurences[k] = 0;
+  temp_array = calc_occurences(&bwt[j],block_size,alphabet);
+  
+  array_of_blocks[i].block_size = block_size;
   printf("printing occ\n");
   for (k=0;k<strlen(alphabet);k++)
-    printf("%d",array_of_blocks[i].occurences[k]);
+    printf("%d ",array_of_blocks[i].occurences[k]);
    printf("\n");
 
   if (flag_mtf)
   {
    printf("----Move to front encoding----\n");
-   array_of_blocks[i].front = move_to_front_encode(alphabet,&bwt[j],block_size);
+   move_to_front_encode(alphabet,&bwt[j],block_size);
   }
   else
   {
@@ -59,7 +72,14 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
  remainder = *length - j;
  if (remainder>0)
  {
-  array_of_blocks[i].occurences = calc_occurences(&bwt[j],remainder,alphabet);
+ 	printf("handling remaining\n");
+  count_of_blocks++;
+  array_of_blocks[i].block_size = remainder;
+
+  //temp_array = calc_occurences(&bwt[j],remainder,alphabet);
+  array_of_blocks[i].occurences = (unsigned int*)malloc(strlen(alphabet)*sizeof(unsigned int));
+  for (k=0;k<strlen(alphabet);k++)
+   array_of_blocks[i].occurences[k] = array_of_blocks[i-1].occurences[k] + temp_array[k];
   printf("printing occ\n");
   for (k=0;k<strlen(alphabet);k++)
     printf("%d",array_of_blocks[i].occurences[k]);
@@ -67,12 +87,11 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
   if (flag_mtf)
   {
    printf("----Move to front encoding----\n");
-   array_of_blocks[i].front = move_to_front_encode(alphabet,&bwt[j],remainder);
+   move_to_front_encode(alphabet,&bwt[j],remainder);
   }
   else
   {
    printf("----Alphabet Encoding----\n");
-   array_of_blocks[i].front = NULL;
    alphabet_encode(&bwt[j],alphabet,remainder);
   }
   if (flag_zero_runs)
@@ -91,8 +110,9 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
   printf("bitvector length je %d\n",array_of_blocks[i].bitvector_length);
   print_bit_vector(array_of_blocks[i].bitvector, array_of_blocks[i].bitvector_length);
  }
-
-
+ count_of_blocks--;
+ printf("count of blocks je %d\n",count_of_blocks);
+ *length = count_of_blocks;
  free(bwt);
 
   
@@ -175,22 +195,13 @@ void *move_to_front_decode (char *alphabet, unsigned int string_length,unsigned 
  struct symbol_table *front = build_symbol_table(alphabet);
  struct symbol_table *current;
  unsigned int i;
- printf("string_length = %d\n",string_length);
  for (i=0;i<string_length;i++)
  {
-  printf("%d,s[i] e %d = ",i,s[i]);
   current = decode(front,s[i]);
   s[i]=current->symbol;
-  printf("%c %c\n",current->symbol, front->symbol);
   if (current->symbol != front->symbol)
    front = push_to_front(front,current);
-  printf("gr\n");
  }
- printf("wut\n");
- printf("wut\n");
- printf("wut\n");
- printf("wut\n");
- printf("wut\n");
 }
 
 struct symbol_table *decode(struct symbol_table *front, unsigned char code)
@@ -218,7 +229,7 @@ unsigned int j = 1;
  return j;
 }
 
-struct symbol_table *move_to_front_encode (char *alphabet, char *s, unsigned int block_size)
+void *move_to_front_encode (char *alphabet, char *s, unsigned int block_size)
 {
  unsigned char count;
  int i;
@@ -297,12 +308,12 @@ unsigned char *arithmetic_encode (char *s, unsigned int string_length, unsigned 
  return bitvector;
 }
 
-unsigned char *decompress_block(unsigned int bitvector_length, struct symbol_table *front, unsigned char*bitvector, unsigned int*runs, unsigned char flag_mtf, 
+unsigned char *decompress_block(unsigned int bitvector_length, unsigned char*bitvector, unsigned int*runs, unsigned char flag_mtf, 
 	unsigned char flag_zero_runs, unsigned char flag_huffman, unsigned int block_size, unsigned char*alphabet)
 {
- printf("teraz deokduujem\n");
+ printf("teraz deokduujem blok\n");
  unsigned int i;
- unsigned char *bwt = arithmetic_decode (bitvector,alphabet,bitvector_length, block_size);
+ unsigned char *bwt = arithmetic_decode (bitvector,alphabet, block_size);
  for (i=0;i<block_size;i++)
   printf("%d",bwt[i]);
  if (flag_mtf)
@@ -317,9 +328,12 @@ unsigned char *decompress_block(unsigned int bitvector_length, struct symbol_tab
    bwt[i] = alphabet[bwt[i]];
   }
  }
+ printf("vypis\n");
  for(i=0;i<block_size;i++)
- 	printf("%s\n",bwt);
+ 	printf("%c",bwt[i]);
+ return bwt;
 } 
+
 
 unsigned char decode_bits(unsigned char bits_per_char,unsigned int bitposition, unsigned char *bitvector)
 {
@@ -347,7 +361,7 @@ unsigned char decode_bits(unsigned char bits_per_char,unsigned int bitposition, 
  return result;
 }
 
-unsigned char *arithmetic_decode (unsigned char *bitvector, char *alphabet, unsigned int bitvector_length, unsigned int string_length)
+unsigned char *arithmetic_decode (unsigned char *bitvector, char *alphabet, unsigned int string_length)
 {
  unsigned char bits_per_char = get_min_bits_per_char(alphabet);
  printf("velkost dekodu je %d\n",string_length);
@@ -359,13 +373,13 @@ unsigned char *arithmetic_decode (unsigned char *bitvector, char *alphabet, unsi
  }
  unsigned int i = 0;
  unsigned int bitposition = 0;
- while (bitposition<bitvector_length)
+ while (i<string_length)
  {
   s[i] = decode_bits(bits_per_char,bitposition,bitvector);
   i++;
   bitposition = bitposition + bits_per_char;
  }
- free(bitvector);
+ //free(bitvector);
  return s;
 }
 
