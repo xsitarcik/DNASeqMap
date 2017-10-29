@@ -4,17 +4,20 @@
 #include "compression.h"
 
 
-struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char flag_mtf, unsigned char flag_zero_runs,unsigned char flag_huffman, 
+struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char flag_mtf, unsigned char flag_runs,unsigned char flag_huffman, 
 	unsigned char*alphabet, unsigned char*bwt, unsigned int*length)
 {
 
 	// nutne rozbit bwt na bloky
  //vypocet poctu blokov
- unsigned char bits_per_char = get_min_bits_per_char(alphabet);;
+ unsigned char bits_per_char = get_min_bits_per_char(alphabet);
+ printf("bits per %d\n",bits_per_char);
  unsigned int count_of_blocks = *length/block_size; //zvysok osetrit !
  unsigned int i,j,k,remainder;
  unsigned char *bitvector;
  unsigned int *temp_array;
+ unsigned char*runs;
+ unsigned int run_length;
  unsigned int temp_occ[strlen(alphabet)];
  struct compressed_block *array_of_blocks;
  array_of_blocks = (struct compressed_block*)malloc((count_of_blocks+1)*sizeof(struct compressed_block));
@@ -43,24 +46,28 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
   {
    printf("----Move to front encoding----\n");
    move_to_front_encode(alphabet,&bwt[j],block_size);
+   printf("easz\n");
   }
   else
   {
    printf("----Alphabet Encoding----\n");
    alphabet_encode(&bwt[j],alphabet,block_size);
   }
-  if (flag_zero_runs)
+  if (flag_runs)
   {
-  	//TO TREBA PREROBIT
-  	//alloc runs
-  printf("----Zero Runs Encoding----\n");
-  printf("original length is %d\n",*length);
-  bwt = zero_runs_encode(bwt,length);
-  printf("new length is %d\n",*length);
-  //array_of_blocks[i].runs = 0;
+   run_length = block_size;
+   printf("----Zero Runs Encoding----\n");
+   printf("original length is %d\n",run_length);
+   runs = run_length_encode(&bwt[j],&run_length);
+   printf("new length after ZRE is %d\n",run_length);
   }
   
-  array_of_blocks[i].bitvector = arithmetic_encode(&bwt[j],block_size,bits_per_char,&array_of_blocks[i].bitvector_length);
+  if(flag_runs){
+   array_of_blocks[i].bitvector = arithmetic_encode(runs,run_length,bits_per_char,&array_of_blocks[i].bitvector_length);
+   free(runs);
+  }
+  else	
+   array_of_blocks[i].bitvector = arithmetic_encode(&bwt[j],block_size,bits_per_char,&array_of_blocks[i].bitvector_length);
   printf("bitvector length je %d\n",array_of_blocks[i].bitvector_length);
   print_bit_vector(array_of_blocks[i].bitvector, array_of_blocks[i].bitvector_length);
    
@@ -94,19 +101,22 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
    printf("----Alphabet Encoding----\n");
    alphabet_encode(&bwt[j],alphabet,remainder);
   }
-  if (flag_zero_runs)
+  if (flag_runs)
   {
-  	//TO TREBA PREROBIT
-  	//alloc runs
-  printf("----Zero Runs Encoding----\n");
-  printf("original length is %d\n",*length);
-  bwt = zero_runs_encode(bwt,length);
-  printf("new length is %d\n",*length);
-  //array_of_blocks[i].runs = 0;
+   run_length = remainder;
+   printf("----Zero Runs Encoding----\n");
+   printf("original length is %d\n",run_length);
+   runs = run_length_encode(&bwt[j],&run_length);
+   printf("new length after ZRE is %d\n",run_length);
   }
 
-  bits_per_char = get_min_bits_per_char(alphabet);
-  array_of_blocks[i].bitvector = arithmetic_encode(&bwt[j],remainder,bits_per_char,&array_of_blocks[i].bitvector_length);
+  if (flag_runs)
+  {
+   array_of_blocks[i].bitvector = arithmetic_encode(runs,run_length,bits_per_char,&array_of_blocks[i].bitvector_length);
+   free(runs);
+  }
+  else
+   array_of_blocks[i].bitvector = arithmetic_encode(&bwt[j],remainder,bits_per_char,&array_of_blocks[i].bitvector_length);
   printf("bitvector length je %d\n",array_of_blocks[i].bitvector_length);
   print_bit_vector(array_of_blocks[i].bitvector, array_of_blocks[i].bitvector_length);
  }
@@ -221,7 +231,7 @@ unsigned char get_min_bits_per_char(char *alphabet)
 unsigned int symbols_count = strlen(alphabet);
 unsigned int i = 2;
 unsigned int j = 1;
- while (symbols_count>=i)
+ while (symbols_count>i)
  {
   j++;
   i = i *2;
@@ -235,6 +245,7 @@ void *move_to_front_encode (char *alphabet, char *s, unsigned int block_size)
  int i;
  struct symbol_table *front = build_symbol_table(alphabet);
  struct symbol_table *current = front;
+ printf("%s\n",s);
  //for each character in string
  for (i=0;i<block_size;i++)
  {
@@ -309,13 +320,13 @@ unsigned char *arithmetic_encode (char *s, unsigned int string_length, unsigned 
 }
 
 unsigned char *decompress_block(unsigned int bitvector_length, unsigned char*bitvector, unsigned int*runs, unsigned char flag_mtf, 
-	unsigned char flag_zero_runs, unsigned char flag_huffman, unsigned int block_size, unsigned char*alphabet)
+	unsigned char flag_runs, unsigned char flag_huffman, unsigned int block_size, unsigned char*alphabet)
 {
- printf("teraz deokduujem blok\n");
+ //printf("teraz dekodujem blok\n");
  unsigned int i;
  unsigned char *bwt = arithmetic_decode (bitvector,alphabet, block_size);
- for (i=0;i<block_size;i++)
-  printf("%d",bwt[i]);
+ //for (i=0;i<block_size;i++)
+  //printf("%d",bwt[i]);
  if (flag_mtf)
  {
   printf("------MTF decoding----\n");
@@ -328,9 +339,9 @@ unsigned char *decompress_block(unsigned int bitvector_length, unsigned char*bit
    bwt[i] = alphabet[bwt[i]];
   }
  }
- printf("vypis\n");
+ /*printf("vypis\n");
  for(i=0;i<block_size;i++)
- 	printf("%c",bwt[i]);
+ 	printf("%c",bwt[i]);*/
  return bwt;
 } 
 
@@ -364,7 +375,7 @@ unsigned char decode_bits(unsigned char bits_per_char,unsigned int bitposition, 
 unsigned char *arithmetic_decode (unsigned char *bitvector, char *alphabet, unsigned int string_length)
 {
  unsigned char bits_per_char = get_min_bits_per_char(alphabet);
- printf("velkost dekodu je %d\n",string_length);
+ //printf("velkost dekodu je %d\n",string_length);
  unsigned char*s = (unsigned char*)malloc(string_length);
  if (s==NULL)
  {
@@ -431,46 +442,177 @@ void print_bit_vector(unsigned char *bitvector, unsigned int bitvector_length)
  printf("\n");
 }
 
-unsigned char* zero_runs_encode(unsigned char *s, unsigned int *string_length)
+/*
+RUN-LENGTH ENCODING
+-when? = at least two same consecutive characters 
+-what? = saves count of run-length of character (including those two)
+-where? = in table "runs" of that block
+*/
+unsigned char* run_length_encode(unsigned char *s, unsigned int *string_length)
 {
  unsigned int i = 0;
  unsigned int j = 0;
  unsigned int cmp = *string_length-1;
- unsigned char *encoded = (unsigned char*) malloc(cmp*2*sizeof(char));
- unsigned char previous = s[0];
- unsigned char counter = 0;
- printf("hodnota stringlenght je %d\n",*string_length);
+ unsigned char previous;
+ unsigned char counter;
+ unsigned char*encoded = (unsigned char *)malloc(*string_length*2);
+ fflush(stdout);
  while(i<=cmp)
  {
-  counter = 0;  
-  while (s[i]==0 && i!=cmp)
+  counter = 1;
+  previous = s[i];
+  encoded[j] = previous;
+  j++;
+  i++;  
+  while (s[i]==previous && i<=cmp)
   {
    counter++;
    i++;
   }
-  if (counter!=0)
+  if (counter>1)
   {
-   encoded[j] = 0;
+  	printf("count je %d\n",counter);
+   encoded[j] = previous;
    j++;
    encoded[j] = counter;
    j++;
   }
-  else 
-  {
-   encoded[j] = s[i];
-   j++;
-   i++;
-  }
  }
+
  printf("encoded[j] %d\n",encoded[j-1]);
- printf("finne %d %d\n",j,*string_length); 
+ printf("j = %d length = %d\n",j,*string_length); 
  if (j!=*string_length)
   encoded = (unsigned char *)realloc(encoded,j);
  printf("usetrilo sa %d bytov\n",*string_length-j);
  *string_length = j;
- printf("hodnota stringlenght je %d\n",*string_length);
- free(s);
+ printf("hodnota stringlength je %d\n",*string_length);
+ //free(s);
  return encoded;
+}
+
+struct huffman_node *get_root(struct huffman_node **heap, unsigned int size)
+{
+    struct huffman_node* temp = heap[0];
+    heap[0] = heap[size-1];
+    heapify(heap, 0, size-1);
+    return temp;
+}
+
+void heapify(struct huffman_node **heap, unsigned int index, unsigned int size)
+{
+ unsigned int left_child = index*2+1;
+ unsigned int right_child = index*2+2;
+ unsigned int min = index;
+ struct huffman_node*swap;
+
+ if (left_child<size && heap[left_child]->freq < heap[index]->freq)
+  min = left_child;
+ if (right_child<size && heap[right_child]->freq < heap[index]->freq)
+  min = right_child;
+ 
+ if (min != index)
+ {
+  swap = heap[min];
+  heap[min] = heap[index];
+  heap[index] = swap;
+  heapify(heap,index,size);
+ }
+}
+
+struct huffman_node *create_new_node(unsigned char c, unsigned int freq)
+{
+ struct huffman_node * current = (struct huffman_node *) malloc(sizeof(struct huffman_node));
+ current->symbol = c;
+ current->freq = freq;
+ current->left = NULL;
+ current->right = NULL;
+ return current;
+}
+
+struct huffman_node **build_min_heap(unsigned char*alphabet, unsigned int*freq, unsigned int alphabet_length)
+{
+ int i;
+ struct huffman_node ** heap = (struct huffman_node **) malloc(sizeof(struct huffman_node*)*alphabet_length);
+
+ for (i=0;i<alphabet_length;i++)
+ {
+  heap[i] = create_new_node(alphabet[i],freq[i]);
+ }
+ for (i=0;i<alphabet_length;i++)
+ {
+ 	printf("%d=%d\n",heap[i]->freq,heap[i]->symbol);
+ }
+ printf("\n");
+ for (i=alphabet_length/2;i>=0;i--)
+ {
+ 	heapify(heap,i,alphabet_length);
+ }
+for (i=0;i<alphabet_length;i++)
+ {
+ 	printf("%d=%d\n",heap[i]->freq,heap[i]->symbol);
+ }
+ printf("\n");
+
+ return heap;
+}
+
+struct huffman_node *build_huffman_tree(unsigned char*alphabet,unsigned int*freq)
+{
+ unsigned int alphabet_length = strlen(alphabet);
+ struct huffman_node ** heap = build_min_heap(alphabet,freq,alphabet_length);
+ struct huffman_node *left_node;
+ struct huffman_node *right_node;
+ struct huffman_node *root_node;
+ struct huffman_node *current;
+ unsigned int i = 0;
+ int size = alphabet_length;
+ unsigned int power;
+ unsigned char code;
+ unsigned int huffman_tree_size = size+size-1;
+ while (size>1)
+ {
+    printf("size je %d\n",size);
+ //extract 2 min frequencies from heap
+ left_node = get_root(heap,size);
+ printf("extrahovali sme %d %c\n",left_node->freq,left_node->symbol);
+ size--;
+ if (size!=0)
+ {
+  right_node = get_root(heap,size);
+  size--;
+ }
+ else
+ {
+  right_node = heap[0];
+  size--;
+ }
+printf("extrahovali sme %d %c\n",right_node->freq,right_node->symbol);
+ //add extracted frequencies and its sum to huffman tree
+ //add to heap sum of extracted roots of minheap
+ root_node = create_new_node('a',left_node->freq+right_node->freq);
+ root_node->left = left_node;
+ root_node->right = right_node;
+ heap[size] = root_node;
+ size++;
+ }
+ printf("ukonecne\n");
+ current = root_node;
+
+ power = 1;
+ code = 0;
+ while (1)
+ {
+  if (current->left==NULL && current->right==NULL)
+  {
+   printf("kod je %d %c\n",current->freq,current->symbol);
+   break;
+  }
+  printf("%d=%c\n",current->freq,current->symbol);
+  current = current->left;
+  
+ }
+ printf("\n");
+
 }
 
 

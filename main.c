@@ -6,11 +6,11 @@
 //#include "compression.h"
 
 unsigned int genome_length;
-unsigned int block_size = 16;
-unsigned int sample_OCC_size = 12;
-unsigned int sample_SA_size = 8;
-unsigned char flag_compress = 0;
-unsigned char flag_zero_runs = 0;
+unsigned int block_size = 18;
+unsigned int sample_OCC_size = 18;
+unsigned int sample_SA_size = 12;
+unsigned char flag_compress = 1;
+unsigned char flag_runs = 1;
 unsigned char flag_mtf = 1;
 unsigned char flag_huffman = 0;
 
@@ -19,7 +19,7 @@ int main(void)
  int i,j;
  unsigned int *suffix_array = NULL;
  unsigned int *sample_SA = NULL;
- unsigned char *s = "AAAGGGGCTGTTAGTTATGCCCCGCGAGGATTCGAAAAGGTGAGCCAACTCGGCCGATCCGGAGAGACGGGCTTCAAAGC$";
+ unsigned char *s = "AAAAGGGGCTGTTAGTTATGCCCCGCGAGGATTCGAAAAGGTGAGCCAACT$";
  				           //AAAGGGGCTGTTAGTTATGCCCCGCGAGGATTCGAAAAGGTGAGCCAACTCGGCCGATCCGGAGAGACGGGCTTCAAAGC$
  unsigned char *bwt = NULL;
  unsigned int *bitvector_length;
@@ -48,7 +48,7 @@ int main(void)
  //build FMIndex and free suffix_array AND GENOME (to do)
  if (flag_compress)
  {
-  compressed_FM_index = build_compressed_FM_index(suffix_array,sample_SA_size, sample_OCC_size, genome_length,bwt,alphabet,flag_mtf, flag_zero_runs, flag_huffman, block_size);
+  compressed_FM_index = build_compressed_FM_index(suffix_array,sample_SA_size, sample_OCC_size, genome_length,bwt,alphabet,flag_mtf, flag_runs, flag_huffman, block_size);
 
  }
  else
@@ -57,17 +57,17 @@ int main(void)
   
   printf("Org string is: %s\n",s);
   print_info_fm_index(FM_index);
-/*
-  int*result = search_pattern(FM_index,"GGGGC");
+///*
+  int*result = search_pattern(FM_index,"AAAA");
   printf("results: %d %d\n",result[0],result[1]);
   while (result[0]<result[1])
   {
    printf("sa value %d je %d\n",result[0],get_SA_value(result[0],FM_index->bwt[result[0]],FM_index));
    result[0]++;
-  }*/
+  }//*/
  }
  
- 
+
 
  //app matching:
  //int*result = approximate_search(2,FM_index,"ACGAAACGATT");
