@@ -526,6 +526,7 @@ struct huffman_node *create_new_node(unsigned char c, unsigned int freq)
  current->freq = freq;
  current->left = NULL;
  current->right = NULL;
+ current->visited = 0;
  return current;
 }
 
@@ -565,9 +566,9 @@ struct huffman_node *build_huffman_tree(unsigned char*alphabet,unsigned int*freq
  struct huffman_node *root_node;
  struct huffman_node *current;
  unsigned int i = 0;
+ unsigned int j = 0;
  int size = alphabet_length;
- unsigned int power;
- unsigned char code;
+ unsigned char code[alphabet_length];
  unsigned int huffman_tree_size = size+size-1;
  while (size>1)
  {
@@ -596,23 +597,48 @@ printf("extrahovali sme %d %c\n",right_node->freq,right_node->symbol);
  size++;
  }
  printf("ukonecne\n");
- current = root_node;
 
- power = 1;
- code = 0;
- while (1)
+ 
+ while (i<alphabet_length)
  {
-  if (current->left==NULL && current->right==NULL)
+  current = root_node;
+  j = 0;
+  while(1)
   {
-   printf("kod je %d %c\n",current->freq,current->symbol);
-   break;
+   while (current->left != NULL && current->left->visited==0)
+   {
+    current = current->left;
+    code[j] = '0';
+    j++;
+   }
+   while (current->right != NULL && current->right->visited==0)
+    {
+    current = current->right;
+    code[j] = '1';
+    j++;
+   }
+   //ak je list
+   if (current->left==NULL && current->right==NULL)
+   {
+    current->visited = 1;
+    break;
+   }
+   else if (current->left->visited==1 && current->right->visited==1)
+   {
+    current->visited = 1;
+    break;
+   }
   }
-  printf("%d=%c\n",current->freq,current->symbol);
-  current = current->left;
-  
+  //ak je list
+   if (current->left==NULL && current->right==NULL)
+   {
+    code[j]='\0';
+    printf("kod je %s, %d %c\n",code,current->freq,current->symbol);
+    i++;
+   }
  }
  printf("\n");
-
+ 
 }
 
 

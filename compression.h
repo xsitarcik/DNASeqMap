@@ -16,6 +16,7 @@ struct compressed_block
 
 struct huffman_node
 {
+ unsigned char visited;
  unsigned int freq;
  unsigned char symbol;
  struct huffman_node*left;
