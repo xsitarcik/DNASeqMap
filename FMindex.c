@@ -22,7 +22,7 @@ struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned int sample_SA
  FM_index->alphabetically_encoded  = 0;
  alphabet_encode(FM_index->bwt,alphabet,genome_length);
  FM_index->alphabetically_encoded = 1;
- //FM_index->bwt = arithmetic_encode(FM_index->bwt,genome_length,bits_per_char,&FM_index->bitvector_length);
+ //FM_index->bwt = bit_pack(FM_index->bwt,genome_length,bits_per_char,&FM_index->bitvector_length);
  count_occ(FM_index->bwt,FM_index->occurence_table,41,2,2,sample_OCC_size);
  return FM_index;
 }
@@ -46,6 +46,7 @@ struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, u
  compressed_FM_index->count_table = create_count_table(bwt,genome_length,alphabet);
  compressed_FM_index->array_of_blocks = compress_FMIndex(block_size,flag_mtf,flag_runs,flag_huffman,alphabet,bwt,&compressed_FM_index->length);
  printf("pocet blkov je %d\n",compressed_FM_index->length);
+ //huffman_decode(compressed_FM_index->array_of_blocks[0].bitvector,compressed_FM_index->array_of_blocks[0].huffman_tree,compressed_FM_index->array_of_blocks[0].block_size);
  /*count_occ_in_compressed_FMIndex(38, 'G',compressed_FM_index);
  count_occ_in_compressed_FMIndex(39, 'G',compressed_FM_index);
  count_occ_in_compressed_FMIndex(40, 'G',compressed_FM_index);
@@ -53,11 +54,8 @@ struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, u
  //printf("vysledok je %d",get_SA_value_compressed(1, genome_length, sample_SA_size, alphabet, 
   //compressed_FM_index->sampleSA,compressed_FM_index->count_table,compressed_FM_index->block_size, compressed_FM_index->array_of_blocks, flag_mtf, flag_runs, flag_huffman));
  //search_pattern_in_compressed_FM_index(compressed_FM_index, "GTTA",flag_mtf, flag_runs, flag_huffman);
- //unsigned char *dcp = decompress_FMIndex(compressed_FM_index);
-
- printf("----------------------");
- unsigned int freq[] = {8, 9, 4, 13, 2};
- build_huffman_tree(alphabet, freq);
+ unsigned char *dcp = decompress_FMIndex(compressed_FM_index);
+ //printf("%s\n",decompress_block(compressed_FM_index->array_of_blocks[0].bitvector_length,compressed_FM_index->array_of_blocks[0].bitvector,flag_mtf,flag_runs,flag_huffman,50,alphabet,compressed_FM_index->array_of_blocks[0].huffman_tree));
  return compressed_FM_index;
 }
 
@@ -130,7 +128,7 @@ unsigned int get_SA_value_compressed(unsigned int bwt_position, unsigned int len
  while(bwt_position%sample_SA_size!=0)
  {
   position = bwt_position - index*block_size;
-  unsigned char *bwt = decompress_block(block[index].bitvector_length,block[index].bitvector,block[index].runs,flag_mtf,flag_runs,flag_huffman,position+1,alphabet);
+  unsigned char *bwt = decompress_block(block[index].bitvector_length,block[index].bitvector,flag_mtf,flag_runs,flag_huffman,position+1,alphabet,block[index].huffman_tree);
   c = bwt[position];
   free(bwt);
   //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
@@ -142,6 +140,7 @@ unsigned int get_SA_value_compressed(unsigned int bwt_position, unsigned int len
   index = bwt_position/block_size;
   count++;
  }
+
  //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
  unsigned int result = sampleSA[bwt_position/sample_SA_size]+count;
  if (result>=length)
@@ -162,6 +161,7 @@ unsigned int last_to_first(unsigned char c, unsigned int bwt_position, unsigned 
  //printf("predchodca rotacie %d je %d\n",bwt_position,last);
  return last;
 }
+
 
 unsigned int last_to_first_in_compressed_FMIndex(unsigned char c, unsigned int bwt_position, unsigned char*alphabet, unsigned int* count_table,struct compressed_block *block, unsigned int block_size, 
   unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
@@ -276,7 +276,7 @@ unsigned int count_occ_in_block(struct compressed_block *block, unsigned int pos
  unsigned int occurences = block->occurences[alphabet_index];
  //printf("occ %d je %d\n",c,occurences);
 
- unsigned char *bwt = decompress_block(block->bitvector_length,block->bitvector,block->runs,flag_mtf,flag_runs,flag_huffman,position,alphabet);
+ unsigned char *bwt = decompress_block(block->bitvector_length,block->bitvector,flag_mtf,flag_runs,flag_huffman,position,alphabet,block->huffman_tree);
  for (i=0;i<position;i++)
   if (bwt[i] == c)
     count++;
@@ -328,13 +328,11 @@ unsigned char *decompress_FMIndex(struct compressedFMIndex *compressed_FM_index)
  {
   cb = &compressed_FM_index->array_of_blocks[i];
   //printf("dekopmresujem blok cislo %d\n",i);
-  decompressed = decompress_block(cb->bitvector_length, cb->bitvector, cb->runs, flag_mtf, flag_runs, flag_huffman, cb->block_size, alphabet);
+  decompressed = decompress_block(cb->bitvector_length, cb->bitvector, flag_mtf, flag_runs, flag_huffman, cb->block_size, alphabet, cb->huffman_tree);
   bwt = (unsigned char *) realloc(bwt,index+cb->block_size);
   strcpy(&bwt[index],decompressed);
   index = index + cb->block_size;
   //free(compressed_FM_index->array_of_blocks[i].occurences);
-  if (flag_runs)
-   free(compressed_FM_index->array_of_blocks[i].runs); 
   free(compressed_FM_index->array_of_blocks[i].bitvector); 
 
   printf("\n");
@@ -369,7 +367,7 @@ unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, uns
   a = bwt[end];
   reversed[j] = a;
   j--;
-  printf("a je %d=%c\n",a,a);
+  printf("end=%d,a je %d=%c\n",end,a,a);
   character = get_alphabet_index(alphabet,a);
   //printf("pricom %d + %d\n",count_table[character],count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet));
   end = count_table[character]-1 + count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet);
@@ -377,7 +375,7 @@ unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, uns
     printf("end je %d, length je %d\n",end,length);
     end = end - length;
   }
-  printf("nova pozicia je %d\n",end);
+  //printf("nova pozicia je %d\n",end);
  }
  printf("%s\n",reversed);
 }
@@ -392,6 +390,9 @@ void alphabet_decode (unsigned char *s, unsigned char * alphabet)
  }
 }
 
+/*CAGGAGCCGGGTCAAGTCTTGCGCGCGTACCTTCGAAGCGGGCGAACAGGAAGCATGACTTCGGCTGGGCCCCGTCCCCACCGGGCACGCCGTAGAGGGGCAGGGTCATCGGCGCTTGAAAACTGGGGGAA
+TGGCCGGCCAGCGTTGCACGACGGGCGCGTTGTGATTAGGCGCCTAGGGGCTGGCCTTGCACCGCGCTCATTCAAGGGGAGACTACAAGACGAGGGCCCCCTCCACACTTGGCTGTAGGAACGTACCAGCTGC
+TCTTCCCAAGTCTGGAGGGGGGCCCGACTCGTAACTCCCATTCCGCACGGCCGGAAGCGACCGAGCGTGTCGGCAGCCCCGGCTGACGCATGAAACAACTCGATTGCGGAGACGCCTCAG*/
 unsigned char *reverseBWT(unsigned int length, unsigned int end, unsigned char*alphabet,unsigned int*count_table,unsigned char*bwt, unsigned int**occurence_table,unsigned int sample_OCC_size,unsigned char alphabetically_encoded)
 {
  int i = 0;

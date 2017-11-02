@@ -6,32 +6,33 @@
 //#include "compression.h"
 
 unsigned int genome_length;
-unsigned int block_size = 18;
-unsigned int sample_OCC_size = 18;
-unsigned int sample_SA_size = 12;
+unsigned int block_size = 128;
+unsigned int sample_OCC_size = 128;
+unsigned int sample_SA_size = 36;
 unsigned char flag_compress = 1;
-unsigned char flag_runs = 1;
+unsigned char flag_runs = 0;
 unsigned char flag_mtf = 1;
-unsigned char flag_huffman = 0;
+unsigned char flag_huffman = 1;
 
-int main(void)
+int main ( int argc, char *argv[] )
 {
  int i,j;
  unsigned int *suffix_array = NULL;
  unsigned int *sample_SA = NULL;
- unsigned char *s = "AAAAGGGGCTGTTAGTTATGCCCCGCGAGGATTCGAAAAGGTGAGCCAACT$";
- 				           //AAAGGGGCTGTTAGTTATGCCCCGCGAGGATTCGAAAAGGTGAGCCAACTCGGCCGATCCGGAGAGACGGGCTTCAAAGC$
+ unsigned char *s = "GGATCTGCGTCACAGCGAGCATAGCGAGAGCGGAGTTGCCGACGGCGGAGGCGACGCAGGGATCCGTCGGCCGCCATCCGCGGAAAGCATCCGCCCCCGAGGGGGACAGTCACTGACGCGGTCTTGCAGAGGCCTAGGGGGGCAGGTCAGTTTGAGTGGCTTGAGAACGCGAACTCTGGGATTACAGTGCAGTAATCTCCGGTCAACGGTGACGGCTTTAAGACAGGTCTTCGCAAAACCAGGCGGGGTGGCCTCGACGGGTTTTGCTGGTGGTTCAGGCGTACAATGCCCTGAAGAATAATTGAGAAAGTAGCACCCCTCGCCGCCTAGGATTACCTACCGGCGTCCGCCGCACCTTCGATTGTCGCGCCCACCCTCCCATTAGCCGGCACAGGTGGATGTGTCGCGACAGCCCGCCAAGATATCCTGAGGCGCAACGCGGACGGATGTCCCACGGAGTTGCCACAGGCGCCGAGCGCTTCACGGGCGACAGGAACTTG";
  unsigned char *bwt = NULL;
  unsigned int *bitvector_length;
  struct FMIndex *FM_index = NULL;
  struct compressedFMIndex *compressed_FM_index = NULL;
- unsigned char *alphabet = "$ACGT";
+ unsigned char *alphabet = "ACGT";
  //load genome
  //abeceda
  //TODO
 
  genome_length = strlen(s);
- 
+
+ for (i=0;i<argc;i++)
+  printf("%s\n",argv[i]);
  //count if memory is sufficient
  // for construction of SA we need cca 5n bytes 
  // then for bwt we need another n bytes
