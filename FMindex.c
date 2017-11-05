@@ -134,9 +134,7 @@ unsigned int get_SA_value_compressed(unsigned int bwt_position, unsigned int len
   //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
   bwt_position = last_to_first_in_compressed_FMIndex(c,bwt_position,alphabet,count_table,block, block_size, flag_mtf,flag_runs,flag_huffman);
   //printf("**********-nova wt position %d znak %c, count %d\n",bwt_position,c,count);
-  if (count==30){
-    printf("koncim\n");break;
-  }
+
   index = bwt_position/block_size;
   count++;
  }
@@ -298,7 +296,7 @@ unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, u
   unsigned int index = position/block_size;
   unsigned int start = index*block_size;
   int count = 0;
-  //printf("index je %d, start je %d, position %d, c je %c\n",index,start,position,c);
+  printf("index je %d, start je %d, position %d, c je %c\n",index,start,position,c);
   while (start<position)
   {
     //printf("start=%d, c = %c\n",start,bwt[start]);
@@ -309,7 +307,7 @@ unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, u
   if (bwt[position]==c)
       count++;
   unsigned char a = get_alphabet_index(alphabet,c);
-  //printf("occ %d + count %d\n",block[index].occurences[a],count);
+  printf("occ %d + count %d\n",block[index].occurences[a],count);
   return (block[index].occurences[a]+count);
 }
 
@@ -369,7 +367,7 @@ unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, uns
   j--;
   printf("end=%d,a je %d=%c\n",end,a,a);
   character = get_alphabet_index(alphabet,a);
-  //printf("pricom %d + %d\n",count_table[character],count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet));
+  printf("pricom %d + %d\n",count_table[character],count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet));
   end = count_table[character]-1 + count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet);
   if (end>length){
     printf("end je %d, length je %d\n",end,length);
@@ -377,7 +375,7 @@ unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, uns
   }
   //printf("nova pozicia je %d\n",end);
  }
- printf("%s\n",reversed);
+ printf("REVERSED JE\n%s\n",reversed);
 }
 
 void alphabet_decode (unsigned char *s, unsigned char * alphabet)
