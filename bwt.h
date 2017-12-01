@@ -1,5 +1,8 @@
-int *init_suffix_array(int *suffix_array,char *s, int genome_length);
-int max(int number1, int number2);
-int compare_rotations(char *s, int start1, int start2, int genome_length);
-int *insertion_sort_array(int *suffix_array, char *s, int genome_length);
-char *create_bwt(int *suffix_array, char *s, int genome_length);
+unsigned int *init_suffix_array(unsigned int *suffix_array,unsigned char *s, unsigned int genome_length);
+unsigned int max(unsigned int number1,unsigned int number2);
+unsigned int min(unsigned int number1,unsigned int number2);
+unsigned int compare_rotations(unsigned char *s, unsigned int start1, unsigned int start2, unsigned int genome_length);
+unsigned int *insertion_sort_array(unsigned int *suffix_array, unsigned char *s, unsigned int genome_length);
+unsigned char *create_bwt(unsigned int *suffix_array, unsigned char *s, unsigned int genome_length);
+unsigned char*load_genome_from_file(unsigned char*file,unsigned int*genome_length);
+void reverse_string(unsigned char *str);

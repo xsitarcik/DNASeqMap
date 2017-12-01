@@ -8,11 +8,7 @@
 struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char flag_mtf, unsigned char flag_runs,unsigned char flag_huffman, 
 	unsigned char*alphabet, unsigned char*bwt, unsigned int*length)
 {
-
-	// nutne rozbit bwt na bloky
- //vypocet poctu blokov
  unsigned char bits_per_char = get_min_bits_per_char(alphabet);
- printf("bits per %d\n",bits_per_char);
  unsigned int count_of_blocks = *length/block_size; //zvysok osetrit !
  unsigned int i,j,k,remainder;
  unsigned char *bitvector;
@@ -21,11 +17,11 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
  unsigned int run_length;
  unsigned char*temp_alphabet;
  unsigned char*new_alphabet;
- unsigned int temp_occ[strlen(alphabet)];
  unsigned int *frequencies;
  struct compressed_block *array_of_blocks;
  unsigned char new_alphabet_length;
  unsigned char alphabet_index;
+ unsigned int temp_alphabet_length;
  array_of_blocks = (struct compressed_block*)malloc((count_of_blocks+1)*sizeof(struct compressed_block));
  j = 0;
  for (i = 0; i<count_of_blocks;i++)
@@ -33,10 +29,6 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
   array_of_blocks[i].occurences = (unsigned int*)malloc(strlen(alphabet)*sizeof(unsigned int));
   if (i!=0)
   {
-    printf("printing  %d before occ\n",i);
-  for (k=0;k<strlen(alphabet);k++)
-    printf("%d ",array_of_blocks[i-1].occurences[k]);
-   printf("\n");
     for (k=0;k<strlen(alphabet);k++)
      array_of_blocks[i].occurences[k] = array_of_blocks[i-1].occurences[k] + temp_array[k];
   }
@@ -46,70 +38,63 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
   temp_array = calc_occurences(&bwt[j],block_size,alphabet);
   
   array_of_blocks[i].block_size = block_size;
-  printf("printing occ\n");
+  
+  /*printf("printing occ\n");
   for (k=0;k<strlen(alphabet);k++)
     printf("%d ",array_of_blocks[i].occurences[k]);
    printf("\n");
-  
-  printf("printing temp\n");
-  for (k=0;k<strlen(alphabet);k++)
-    printf("%d ",temp_array[k]);
-   printf("\n");
+  */
 
   if (flag_mtf)
   {
-   printf("----Move to front encoding----\n");
+   //printf("----Move to front encoding----\n");
    move_to_front_encode(alphabet,&bwt[j],block_size);
-   printf("easz\n");
   }
   else
   {
-   printf("----Alphabet Encoding----\n");
+   //printf("----Alphabet Encoding----\n");
    alphabet_encode(&bwt[j],alphabet,block_size);
   }
 
   if (flag_runs)
   {
    run_length = block_size;
-   printf("----Zero Runs Encoding----\n");
-   printf("original length is %d\n",run_length);
-   printf("printing 0xAGAIN occ\n");
-  for (k=0;k<strlen(alphabet);k++)
-    printf("%d ",array_of_blocks[i].occurences[k]);
-   printf("\n");
+   //printf("----Zero Runs Encoding----\n");
+   //printf("original length is %d\n",run_length);
+   
    temp_alphabet = (unsigned char*)malloc(block_size/2);
-   runs = run_length_encode(&bwt[j],&run_length,temp_alphabet);
-   printf("printing 0,5xAGAIN occ\n");
-  for (k=0;k<strlen(alphabet);k++)
-    printf("%d ",array_of_blocks[i].occurences[k]);
-   printf("\n");
-   for (k=0;k<run_length;k++)
-    printf("%d",runs[k]);
-   printf("\n");
-   new_alphabet = order_new_alphabet(temp_alphabet,alphabet,&new_alphabet_length);
-   for(k=0;k<strlen(new_alphabet);k++)
+   runs = run_length_encode(&bwt[j],&run_length,temp_alphabet,&temp_alphabet_length,flag_runs);
+   temp_alphabet = (unsigned char*)realloc(temp_alphabet,temp_alphabet_length);
+   new_alphabet = order_new_alphabet(temp_alphabet,alphabet,&new_alphabet_length,temp_alphabet_length);
+   /*for(k=0;k<strlen(new_alphabet);k++)
     printf("pocet: %d\n",new_alphabet[k]);
-   printf("new length after ZRE is %d\n",run_length);
+   printf("new length after ZRE is %d\n",run_length);*/
   }
-  printf("printing 1xAGAIN occ\n");
-  for (k=0;k<strlen(alphabet);k++)
-    printf("%d ",array_of_blocks[i].occurences[k]);
-   printf("\n");
   if(flag_huffman)
   {
-   printf("----Huffman Encoding----\n");
+   //printf("----Huffman Encoding----\n");
    if(flag_runs)
    {
     //from constructed new alphabet get frequencies
+    /*printf("nova abeceda je dlzky %d a:\n",new_alphabet_length);
+    for (k=0;k<new_alphabet_length;k++)
+     printf("%d",new_alphabet[k]);*/
+
     frequencies = (unsigned int*)calloc(new_alphabet_length,sizeof(unsigned int));
     for (k=0;k<run_length;k++)
     {
+     /*if(runs[k]>3)
+        printf("hladam index %d ajaj %d\n",k,runs[k]);*/
+        //printf("wut %d %d\n",k,runs[k]);
      alphabet_index = get_index_in_alphabet(new_alphabet,runs[k]);
      frequencies[alphabet_index]++;
+
     }
+
+    //printf("idem na huffmanov strom\n");
     array_of_blocks[i].huffman_tree = build_huffman_tree(new_alphabet, frequencies,new_alphabet_length);
     array_of_blocks[i].bitvector= pack_huffman_to_bitvector(array_of_blocks[i].huffman_tree,new_alphabet,new_alphabet_length,runs,run_length,&array_of_blocks[i].bitvector_length,1);
-    free(runs);
+    //free(runs);
    }
    else
    {
@@ -126,10 +111,11 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
    }
    printf("bitvector length je %d\n",array_of_blocks[i].bitvector_length);
    free(frequencies);
-   free(new_alphabet);
+   //free(new_alphabet);
   }
   else if(flag_runs)
   {
+    printf("ZDE\n");
    array_of_blocks[i].bitvector = bit_pack(runs,run_length,bits_per_char,&array_of_blocks[i].bitvector_length);
    free(runs);
   }
@@ -137,23 +123,15 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
    array_of_blocks[i].bitvector = bit_pack(&bwt[j],block_size,bits_per_char,&array_of_blocks[i].bitvector_length);
   
   printf("bitvector length je %d\n",array_of_blocks[i].bitvector_length);
-  print_bit_vector(array_of_blocks[i].bitvector, array_of_blocks[i].bitvector_length);
- 
-
-  printf("printing 2xAGAIN occ\n");
-  for (k=0;k<strlen(alphabet);k++)
-    printf("%d ",array_of_blocks[i].occurences[k]);
-   printf("\n");
-
+  //print_bit_vector(array_of_blocks[i].bitvector, array_of_blocks[i].bitvector_length);
   j = j + block_size;
  }
 
  //HANDLING REMAINING BWT
- printf("zostava %d\n",*length - j);
  remainder = *length - j;
  if (remainder>0)
  {
- 	printf("handling remaining\n");
+ 	printf("handling remaining %d\n",remainder);
   count_of_blocks++;
   array_of_blocks[i].block_size = remainder;
 
@@ -161,39 +139,41 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
   array_of_blocks[i].occurences = (unsigned int*)malloc(strlen(alphabet)*sizeof(unsigned int));
   for (k=0;k<strlen(alphabet);k++)
    array_of_blocks[i].occurences[k] = array_of_blocks[i-1].occurences[k] + temp_array[k];
-  printf("printing occ\n");
+  
+  /*printf("printing occ\n");
   for (k=0;k<strlen(alphabet);k++)
     printf("%d ",array_of_blocks[i].occurences[k]);
    printf("\n");
+   */
   if (flag_mtf)
   {
-   printf("----Move to front encoding----\n");
+   //printf("----Move to front encoding----\n");
    move_to_front_encode(alphabet,&bwt[j],remainder);
   }
   else
   {
-   printf("----Alphabet Encoding----\n");
+   //printf("----Alphabet Encoding----\n");
    alphabet_encode(&bwt[j],alphabet,remainder);
   }
   if (flag_runs)
   {
    run_length = remainder;
-   printf("----Zero Runs Encoding----\n");
-   printf("original length is %d\n",run_length);
+   //printf("----Zero Runs Encoding----\n");
+   //printf("original length is %d\n",run_length);
    temp_alphabet = (unsigned char*)malloc(remainder/2);
-   runs = run_length_encode(&bwt[j],&run_length,temp_alphabet);
-   for (k=0;k<run_length;k++)
+   runs = run_length_encode(&bwt[j],&run_length,temp_alphabet,&temp_alphabet_length,flag_runs);
+   /*for (k=0;k<run_length;k++)
     printf("%d",runs[k]);
-   printf("\n");
-   new_alphabet = order_new_alphabet(temp_alphabet,alphabet,&new_alphabet_length);
-   for(k=0;k<strlen(new_alphabet);k++)
+   printf("\n");*/
+   new_alphabet = order_new_alphabet(temp_alphabet,alphabet,&new_alphabet_length,temp_alphabet_length);
+   /*for(k=0;k<strlen(new_alphabet);k++)
     printf("pocet: %d\n",new_alphabet[k]);
-   printf("new length after ZRE is %d\n",run_length);
+   printf("new length after ZRE is %d\n",run_length);*/
   }
 
   if(flag_huffman)
   {
-   printf("----Huffman Encoding----\n");
+   //printf("----Huffman Encoding----\n");
    if (flag_runs)
    {
     frequencies = (unsigned int*)calloc(new_alphabet_length,sizeof(unsigned int));
@@ -204,7 +184,7 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
     }
     array_of_blocks[i].huffman_tree = build_huffman_tree(new_alphabet, frequencies, new_alphabet_length);
     array_of_blocks[i].bitvector= pack_huffman_to_bitvector(array_of_blocks[i].huffman_tree,new_alphabet,new_alphabet_length, runs,run_length,&array_of_blocks[i].bitvector_length,1);
-    free(runs);
+    //free(runs);
    }
    else
    {
@@ -220,23 +200,23 @@ struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char
     array_of_blocks[i].bitvector= pack_huffman_to_bitvector(array_of_blocks[i].huffman_tree,new_alphabet,strlen(alphabet),&bwt[j],remainder,&array_of_blocks[i].bitvector_length,0);
    }
    printf("bitvector length je %d\n",array_of_blocks[i].bitvector_length);
-   free(frequencies);
-   free(new_alphabet);
+   //free(frequencies);
+   //free(new_alphabet);
   }
   else if(flag_runs)
   {
    array_of_blocks[i].bitvector = bit_pack(runs,run_length,bits_per_char,&array_of_blocks[i].bitvector_length);
-   free(runs);
+   //free(runs);
   }
   else
    array_of_blocks[i].bitvector = bit_pack(&bwt[j],remainder,bits_per_char,&array_of_blocks[i].bitvector_length);
   printf("bitvector length je %d\n",array_of_blocks[i].bitvector_length);
-  print_bit_vector(array_of_blocks[i].bitvector, array_of_blocks[i].bitvector_length);
+  //print_bit_vector(array_of_blocks[i].bitvector, array_of_blocks[i].bitvector_length);
  }
  count_of_blocks--;
  printf("count of blocks je %d\n",count_of_blocks);
  *length = count_of_blocks;
- free(bwt);
+ //free(bwt);
 
   
 
@@ -369,31 +349,13 @@ void *move_to_front_encode (char *alphabet, char *s, unsigned int block_size)
    count++;
   }
   s[i] = count;
-  printf("%d",s[i]);
+  //printf("%d",s[i]);
   if (count != 0)
    front = push_to_front(front,current);
  }
- printf("\n");
+ //printf("\n");
  return front;
 }
-
-/*
-11201120100323033310221111123302013301210011202120101223323301301220020001220003103001212101332110003220033322301112023000333030
-11201120100323033310221111123302013301210011202120101223323301301220020001220003103001212101332110003220033322301112023000333030
-
-
-21032030101032213012312222001111301113201203110333000332020202231021113132022030001112322103122210020000310311120302221320103233
-21032030101032213012312222001111301113201203110333000332020202231021113132022030001112322103122210020000310311120302221320103233
-
-10122322211010030333120310000030012231323032100220203131201010201212202212131122013220001013233212332003101313330231031122102301
-10122322211010030333120310000030012231323032100220203131201010201212202212131122013220001013233212332003101313330231031122102301
-10122322211010030333120310000030012231323032100220203131201010201212202212131122013220001013233212332003101313330231031122102010
-
-02301231222233101200310113120012121231213301303111033212101301300302201013021021313130012023132110033102131302231332
-
-
-
-*/
 
 unsigned char *bit_pack (char *s, unsigned int string_length, unsigned char bits_per_char, unsigned int *bitvector_length)
 {
@@ -402,11 +364,11 @@ unsigned char *bit_pack (char *s, unsigned int string_length, unsigned char bits
  unsigned char count;
  int i,j,k;
  int needed_bytes = (string_length*bits_per_char+7)/8;
- //printf("needed bytes is %d\n",needed_bytes);
+ printf("needed bytes is %d\n",needed_bytes);
  int byte_index;
  int in_byte;
  int wrong_pos = 8 - bits_per_char + 1;
- //printf("bits per char %d, string_length %d\n",bits_per_char, string_length);
+ printf("bits per char %d, string_length %d\n",bits_per_char, string_length);
  unsigned int size = bits_per_char*string_length;
  bitvector = (unsigned char *)calloc(needed_bytes,1); 
  if (bitvector==NULL)
@@ -458,7 +420,7 @@ unsigned char *decompress_block(unsigned int bitvector_length, unsigned char*bit
  if (flag_huffman)
  {
   if (flag_runs)
-   bwt = huffman_decode_with_RLE(bitvector, huffman_tree, block_size);
+   bwt = huffman_decode_with_RLE(bitvector, huffman_tree, block_size,flag_runs);
   else
    bwt = huffman_decode_without_RLE(bitvector, huffman_tree, block_size);
  }
@@ -474,6 +436,7 @@ unsigned char *decompress_block(unsigned int bitvector_length, unsigned char*bit
  {
   printf("\n------MTF decoding----\n");
   move_to_front_decode(alphabet, block_size, bwt);
+  printf("\n------MTF decoding succesfull----\n");
  }
  
  else
@@ -483,7 +446,7 @@ unsigned char *decompress_block(unsigned int bitvector_length, unsigned char*bit
    bwt[i] = alphabet[bwt[i]];
   }
  }
- /*printf("vypis\n");
+ /*
  for(i=0;i<block_size;i++)
  	printf("%c",bwt[i]);*/
  return bwt;
@@ -527,38 +490,36 @@ unsigned char *arithmetic_decode_with_RLE (unsigned char *bitvector, char *alpha
   printf("Error when allocating memory for bitvector\n");
   exit(1);
  }
+ printf("HUE\n");
  unsigned int i = 0;
  unsigned char j;
  unsigned int bitposition = 0;
+ unsigned char is_run = 0;
  
- //GET FIRST TWO SYMBOLS
+ //GET FIRST SYMBOL
  s[i] = decode_bits(bits_per_char,bitposition,bitvector);
  i++;
  bitposition = bitposition + bits_per_char;
  
- s[i] = decode_bits(bits_per_char,bitposition,bitvector);
- bitposition = bitposition + bits_per_char;
- string_length--;
-
  while (i<string_length)
  {
+  s[i] = decode_bits(bits_per_char,bitposition,bitvector);
+  bitposition = bitposition + bits_per_char;
   if (s[i]==s[i-1])
   {
+   j = 0;
    repeat = decode_bits(bits_per_char,bitposition,bitvector);
+   bitposition = bitposition + bits_per_char;
    while (i<string_length && j<repeat)
    {
     i++;
-    j++;
     s[i]=s[i-1];
+    j++;
    }
   }
-  else
-  {
    i++;
-   s[i] = decode_bits(bits_per_char,bitposition,bitvector);
-   bitposition = bitposition + bits_per_char;
-  }
  }
+
  //free(bitvector);
  return s;
 }
@@ -573,7 +534,7 @@ unsigned char *arithmetic_decode_without_RLE (unsigned char *bitvector, char *al
   printf("Error when allocating memory for bitvector\n");
   exit(1);
  }
- printf("-----arithmetic decoding without RLE-----\n");
+ //printf("-----arithmetic decoding without RLE-----\n");
  unsigned int i = 0;
  unsigned int bitposition = 0;
  while (i<string_length)
@@ -621,15 +582,15 @@ unsigned char* huffman_decode_without_RLE(unsigned char*bitvector, struct huffma
   }
   //save decoded code
   s[i] = current->symbol;
-  printf("%d",s[i]);
+  //printf("%d",s[i]);
   i++;
  }
  return s;
 }
 
-unsigned char* huffman_decode_with_RLE(unsigned char*bitvector, struct huffman_node*huffman_tree,unsigned int string_length)
+unsigned char* huffman_decode_with_RLE(unsigned char*bitvector, struct huffman_node*huffman_tree,unsigned int string_length, unsigned char flag_runs)
 {
- unsigned char*s = (unsigned char*)calloc(string_length,1);
+ unsigned char*s = (unsigned char*)calloc(string_length+1,1);
  struct huffman_node *current = huffman_tree;
  unsigned int i=0;
  unsigned char j;
@@ -660,7 +621,7 @@ unsigned char* huffman_decode_with_RLE(unsigned char*bitvector, struct huffman_n
   }
   //save decoded code
   s[i] = current->symbol;
-  printf("%d",s[i]);
+  //printf("%d",s[i]);
   i++;
  
  while (i<string_length)
@@ -681,7 +642,7 @@ unsigned char* huffman_decode_with_RLE(unsigned char*bitvector, struct huffman_n
     byte_index++;
    }
   }
-  if (is_run)
+  if (is_run>=flag_runs)
   {
    j = 0;
 
@@ -689,7 +650,7 @@ unsigned char* huffman_decode_with_RLE(unsigned char*bitvector, struct huffman_n
    while (j<current->symbol && i<string_length)
    {
     s[i]=s[i-1];
-    printf("%d",s[i]);
+    //printf("%d",s[i]);
     i++;
     j++;
    }
@@ -701,12 +662,17 @@ unsigned char* huffman_decode_with_RLE(unsigned char*bitvector, struct huffman_n
   {
    //save decoded code
    s[i] = current->symbol;
-   printf("%d",s[i]);
+   //printf("%d",s[i]);
    if (s[i]==s[i-1])
-    is_run = 1;
+    is_run++;
+   else
+    is_run = 0;
    i++;
   }
  }
+ //printf("i je %d\n",i);
+ s[i]='\0';
+ //printf("%s",s);
  return s;
 }
 
@@ -726,9 +692,9 @@ void alphabet_encode (char *s, char * alphabet,unsigned int block_size)
  {
   count = get_index_in_alphabet(alphabet,s[i]);
   s[i] = count;
-  printf("%d",s[i]);
+  //printf("%d",s[i]);
  }
- printf("\n");
+ //printf("\n");
 }
 
 unsigned char get_set_bits(unsigned char bits)
@@ -776,7 +742,8 @@ RUN-LENGTH ENCODING
 -what? = saves count of run-length of character (including those two)
 -where? = in table "runs" of that block
 */
-unsigned char* run_length_encode(unsigned char *s, unsigned int *string_length, unsigned char* new_alphabet)
+/*
+unsigned char* run_length_encode(unsigned char *s, unsigned int *string_length, unsigned char* new_alphabet, unsigned int *new_alphabet_length)
 {
  unsigned int i = 0;
  unsigned int j = 0;
@@ -800,6 +767,7 @@ unsigned char* run_length_encode(unsigned char *s, unsigned int *string_length, 
   }
   if (counter>1)
   {
+   //printf("%d,",counter);
    encoded[j] = previous;
    j++;
    encoded[j] = counter-2;
@@ -809,15 +777,76 @@ unsigned char* run_length_encode(unsigned char *s, unsigned int *string_length, 
   }
  }
 
- printf("encoded[j] %d\n",encoded[j-1]);
  printf("j = %d length = %d\n",j,*string_length); 
  if (j!=*string_length)
   encoded = (unsigned char *)realloc(encoded,j);
  printf("usetrilo sa %d bytov\n",*string_length-j);
  *string_length = j;
  printf("hodnota string_length je %d\n",*string_length);
- new_alphabet[k]='\0';
+ *new_alphabet_length = k;
+
  //free(s);
+ return encoded;
+}*/
+
+
+unsigned char* run_length_encode(unsigned char *s, unsigned int *string_length, unsigned char* new_alphabet, unsigned int *new_alphabet_length, unsigned char flag_runs)
+{
+ unsigned int i = 0;
+ unsigned int j = 0;
+ unsigned int k = 0;
+ unsigned char c = 0;
+ unsigned int cmp = *string_length-1;
+ unsigned char previous;
+ unsigned char counter;
+ unsigned char*encoded = (unsigned char *)calloc(*string_length*2,1);
+ fflush(stdout);
+ while(i<=cmp)
+ {
+  counter = 1;
+  previous = s[i];
+  encoded[j] = previous;
+  j++;
+  i++;  
+  while (s[i]==previous && i<=cmp)
+  {
+   counter++;
+   i++;
+  }
+  if (counter>flag_runs)
+  {
+   //printf("%d,",counter);
+   c=flag_runs;
+   while (c>0)
+   {
+    encoded[j] = previous;
+    j++;
+    c--;
+   }
+   encoded[j] = counter-flag_runs-1;
+   new_alphabet[k] = encoded[j];
+   j++;
+   k++;
+  }
+  else if (counter>1)
+  {
+    for (c=counter-1;c>0;c--)
+    {
+     encoded[j] = s[i-c];
+     j++;
+    }
+  }
+ }
+
+ //printf("j = %d length = %d\n",j,*string_length);
+ encoded[j]='\0';
+ if (j!=*string_length)
+  encoded = (unsigned char *)realloc(encoded,j+1);
+ printf("usetrilo sa %d bytov\n",*string_length-j);
+ *string_length = j;
+ printf("hodnota string_length je %d\n",*string_length);
+ new_alphabet[k]='\0';
+ *new_alphabet_length = k;
  return encoded;
 }
 
@@ -870,20 +899,20 @@ struct huffman_node **build_min_heap(unsigned char*alphabet, unsigned int*freq, 
  {
   heap[i] = create_new_node(alphabet[i],freq[i]);
  }
- for (i=0;i<alphabet_length;i++)
+ /*for (i=0;i<alphabet_length;i++)
  {
  	printf("%d=%d\n",heap[i]->freq,heap[i]->symbol);
  }
- printf("\n");
+ printf("\n");*/
  for (i=alphabet_length/2;i>=0;i--)
  {
  	heapify(heap,i,alphabet_length);
  }
-for (i=0;i<alphabet_length;i++)
+/*for (i=0;i<alphabet_length;i++)
  {
  	printf("%d=%d\n",heap[i]->freq,heap[i]->symbol);
  }
- printf("\n");
+ printf("\n");*/
 
  return heap;
 }
@@ -903,10 +932,9 @@ struct huffman_node *build_huffman_tree(unsigned char*alphabet,unsigned int*freq
  unsigned int huffman_tree_size = size+size-1;
  while (size>1)
  {
-    printf("size je %d\n",size);
  //extract 2 min frequencies from heap
  left_node = get_root(heap,size);
- printf("extrahovali sme %d %c\n",left_node->freq,left_node->symbol);
+ //printf("extrahovali sme %d %c\n",left_node->freq,left_node->symbol);
  size--;
  if (size!=0)
  {
@@ -918,7 +946,7 @@ struct huffman_node *build_huffman_tree(unsigned char*alphabet,unsigned int*freq
   right_node = heap[0];
   size--;
  }
-printf("extrahovali sme %d %c\n",right_node->freq,right_node->symbol);
+//printf("extrahovali sme %d %c\n",right_node->freq,right_node->symbol);
  //add extracted frequencies and its sum to huffman tree
  //add to heap sum of extracted roots of minheap
  root_node = create_new_node('a',left_node->freq+right_node->freq);
@@ -927,24 +955,30 @@ printf("extrahovali sme %d %c\n",right_node->freq,right_node->symbol);
  heap[size] = root_node;
  size++;
  }
- printf("ukonecne\n");
-
  return root_node;
 }
 
 unsigned char* pack_huffman_to_bitvector(struct huffman_node *root_node, unsigned char *alphabet, unsigned char alphabet_length, unsigned char *s, unsigned int string_length, unsigned int*bitvector_length, unsigned char flag_new_alphabet)
 {
  struct huffman_node *current = root_node;
+
  unsigned int i = 0;
  unsigned int j = 0;
  unsigned int k;
  unsigned int m;
  unsigned char code[alphabet_length];
  unsigned char result_codes[alphabet_length][alphabet_length];
+ printf("idem vyhladat %d\n",current->symbol);
+    fflush(stdout);
  unsigned char *bitvector = (unsigned char*)calloc(string_length,1);
+   
+ printf("%d %d\n",string_length,alphabet_length);
+ fflush(stdout);
  unsigned int bits_counter = 0;
  unsigned int byte_index;
  unsigned char alphabet_index;
+
+
  while (1)
  {
   current = root_node;
@@ -978,7 +1012,11 @@ unsigned char* pack_huffman_to_bitvector(struct huffman_node *root_node, unsigne
   //ak je list
    if (current->left==NULL && current->right==NULL)
    {
+    printf("idem vyhladat %d\n",current->symbol);
+    fflush(stdout);
     i = get_index_in_alphabet(alphabet,current->symbol);
+    printf("najdeny %d\n",i);
+    fflush(stdout);
     for(k=0;k<j;k++)
     {
     result_codes[i][k] = code[k];
@@ -988,10 +1026,10 @@ unsigned char* pack_huffman_to_bitvector(struct huffman_node *root_node, unsigne
    if (current==root_node)
     break;
  }
- printf("\n");
+ /*printf("\n");
  for (i=0;i<alphabet_length;i++)
     printf("kod je %s, abeceda je %d\n",result_codes[i],alphabet[i]);
- 
+ */
  j = 0;
  byte_index = 0;
  m = 0;
@@ -1019,8 +1057,6 @@ unsigned char* pack_huffman_to_bitvector(struct huffman_node *root_node, unsigne
   }
  }
  bitvector[byte_index] = bitvector[byte_index]<<(8-m);
-
- printf("OSTAL SOM NA BITPOSITION %d\n",m);
  byte_index++;
  bitvector = (unsigned char *)realloc(bitvector,byte_index);
  printf("pocet bytov je %d\n",byte_index);
@@ -1028,23 +1064,26 @@ unsigned char* pack_huffman_to_bitvector(struct huffman_node *root_node, unsigne
  return bitvector;
 }
 
-unsigned char* order_new_alphabet(unsigned char*new_alphabet,unsigned char*alphabet,unsigned char *result_length)
+unsigned char* order_new_alphabet(unsigned char*new_alphabet,unsigned char*alphabet,unsigned char *result_length, unsigned int new_alphabet_length)
 {
  unsigned int alphabet_length = strlen(alphabet);
- unsigned int new_alphabet_length = strlen(new_alphabet);
  unsigned char *temp = (unsigned char*) malloc(new_alphabet_length);
  unsigned char c;
  unsigned char *result;
  int i;
  int j=0;
  unsigned int k;
+ printf("alphabet_length je %d\n",alphabet_length);
+ printf("new alphabet_length je %d\n",new_alphabet_length);
  for (i=0;i<new_alphabet_length;i++)
  {
   if (new_alphabet[i]>=alphabet_length)
   {
    k = 0;
-   while (k!=j)
+   //printf("k je %d, j je %d\n",k,j);
+   while (k<=j)
    {
+    //printf("k je %d, j je %d\n",k,j);
     if (temp[k]==new_alphabet[i])
      break;
     k++;
@@ -1056,6 +1095,7 @@ unsigned char* order_new_alphabet(unsigned char*new_alphabet,unsigned char*alpha
    }
   }
  }
+ 
  //order temp
  for (i = 0; i < j-1; i++) {
       for (k = i+1; k < j; k++) {
@@ -1068,15 +1108,27 @@ unsigned char* order_new_alphabet(unsigned char*new_alphabet,unsigned char*alpha
    }
  
  result = (unsigned char*)malloc(alphabet_length+j);
- printf("velkost vyslednej abecedy je %d teda %d\n",alphabet_length+j,strlen(result));
+ printf("velkost vyslednej abecedy je %d %d teda %d\n",alphabet_length,j,strlen(result));
  for(i=0;i<alphabet_length;i++)
   result[i]=i;
- strcpy(&result[alphabet_length],temp);
+ strncpy(&result[alphabet_length],temp,alphabet_length);
+ 
  for(i=0;i<alphabet_length+j;i++)
   printf("%d ",result[i]);
  printf("\n");
+  result[alphabet_length+j]='\0';
  *result_length = alphabet_length+j;
  free(temp);
  free(new_alphabet);
  return result;
+}
+
+void free_huffman_tree(struct huffman_node *node)
+{
+ if (node!=NULL)
+ {
+  free_huffman_tree(node->left);
+  free_huffman_tree(node->right);
+  free(node);
+ }
 }

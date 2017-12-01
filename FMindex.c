@@ -3,6 +3,7 @@
 #include <string.h>
 #include "FMindex.h"
 #include "compression.h"
+#include <time.h>
 
 struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned int sample_SA_size, unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet)
 {
@@ -30,7 +31,7 @@ struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned int sample_SA
 struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, unsigned int sample_SA_size, unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet, 
   unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned int block_size)
 {
-  printf("%s\n",bwt);
+ int i, count=0;
  struct compressedFMIndex *compressed_FM_index = (struct compressedFMIndex*) malloc(sizeof(struct compressedFMIndex));
  compressed_FM_index->sample_SA_size = sample_SA_size;
  compressed_FM_index->block_size = block_size;
@@ -44,8 +45,14 @@ struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, u
  compressed_FM_index->sampleSA = create_sample_SA(suffix_array,sample_SA_size,genome_length);
  free(suffix_array);
  compressed_FM_index->count_table = create_count_table(bwt,genome_length,alphabet);
+
+ clock_t begin = clock();
  compressed_FM_index->array_of_blocks = compress_FMIndex(block_size,flag_mtf,flag_runs,flag_huffman,alphabet,bwt,&compressed_FM_index->length);
+ clock_t end = clock();
+ double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+ printf("trvanie kompresie: %lf", time_spent);
  printf("pocet blkov je %d\n",compressed_FM_index->length);
+ fflush(stdout);
  //huffman_decode(compressed_FM_index->array_of_blocks[0].bitvector,compressed_FM_index->array_of_blocks[0].huffman_tree,compressed_FM_index->array_of_blocks[0].block_size);
  /*count_occ_in_compressed_FMIndex(38, 'G',compressed_FM_index);
  count_occ_in_compressed_FMIndex(39, 'G',compressed_FM_index);
@@ -54,8 +61,21 @@ struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, u
  //printf("vysledok je %d",get_SA_value_compressed(1, genome_length, sample_SA_size, alphabet, 
   //compressed_FM_index->sampleSA,compressed_FM_index->count_table,compressed_FM_index->block_size, compressed_FM_index->array_of_blocks, flag_mtf, flag_runs, flag_huffman));
  //search_pattern_in_compressed_FM_index(compressed_FM_index, "GTTA",flag_mtf, flag_runs, flag_huffman);
+ 
+ /*clock_t begin2 = clock();
  unsigned char *dcp = decompress_FMIndex(compressed_FM_index);
- //printf("%s\n",decompress_block(compressed_FM_index->array_of_blocks[0].bitvector_length,compressed_FM_index->array_of_blocks[0].bitvector,flag_mtf,flag_runs,flag_huffman,50,alphabet,compressed_FM_index->array_of_blocks[0].huffman_tree));
+ clock_t end2 = clock();
+ double time_spent2 = (double)(end2 - begin2) / CLOCKS_PER_SEC;
+ printf("trvanie DEkompresie: %lf", time_spent2);
+
+ printf("DEcompression succesful\n");
+ */
+ 
+ for (i=0;i<=compressed_FM_index->length;i++){
+  count = count + (compressed_FM_index->array_of_blocks[i].bitvector_length+7)/8;
+  printf("DLZKA JE %d\n",compressed_FM_index->array_of_blocks[i].bitvector_length);
+ }
+ printf("pocet bytov je %d a realne je %d\n",count,genome_length);
  return compressed_FM_index;
 }
 
@@ -296,7 +316,7 @@ unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, u
   unsigned int index = position/block_size;
   unsigned int start = index*block_size;
   int count = 0;
-  printf("index je %d, start je %d, position %d, c je %c\n",index,start,position,c);
+  //printf("index je %d, start je %d, position %d, c je %c\n",index,start,position,c);
   while (start<position)
   {
     //printf("start=%d, c = %c\n",start,bwt[start]);
@@ -307,7 +327,7 @@ unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, u
   if (bwt[position]==c)
       count++;
   unsigned char a = get_alphabet_index(alphabet,c);
-  printf("occ %d + count %d\n",block[index].occurences[a],count);
+  //printf("occ %d + count %d\n",block[index].occurences[a],count);
   return (block[index].occurences[a]+count);
 }
 
@@ -327,22 +347,23 @@ unsigned char *decompress_FMIndex(struct compressedFMIndex *compressed_FM_index)
   cb = &compressed_FM_index->array_of_blocks[i];
   //printf("dekopmresujem blok cislo %d\n",i);
   decompressed = decompress_block(cb->bitvector_length, cb->bitvector, flag_mtf, flag_runs, flag_huffman, cb->block_size, alphabet, cb->huffman_tree);
-  bwt = (unsigned char *) realloc(bwt,index+cb->block_size);
-  strcpy(&bwt[index],decompressed);
+  bwt = (unsigned char *) realloc(bwt,index+cb->block_size+1);
+  strncpy(&bwt[index],decompressed,cb->block_size);
+  free(decompressed);
   index = index + cb->block_size;
   //free(compressed_FM_index->array_of_blocks[i].occurences);
   free(compressed_FM_index->array_of_blocks[i].bitvector); 
 
-  printf("\n");
+  //printf("\n");
   
  }
+ bwt[index]='\0';
  //printf("velkost bwt je %d\n",index);
- printf("%s\n",bwt);
+ //printf("%s\n",bwt);
  
 //printf("Reversing .... \n");
-reverseBWT_compressed(bwt,index,compressed_FM_index->end,compressed_FM_index->count_table, alphabet,block_size,compressed_FM_index->array_of_blocks,flag_mtf,flag_runs,flag_huffman);
- // FREE
- return bwt;
+//return reverseBWT_compressed(bwt,index,compressed_FM_index->end,compressed_FM_index->count_table, alphabet,block_size,compressed_FM_index->array_of_blocks,flag_mtf,flag_runs,flag_huffman);
+return 0;
 }
 
 unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, unsigned int end, unsigned int* count_table, unsigned char*alphabet, 
@@ -353,7 +374,6 @@ unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, uns
  unsigned int j = length-1;
  unsigned char a;
  unsigned char character;
- printf("length je %d\n",length);
  unsigned char *reversed = (unsigned char *)malloc(length);
  if (reversed==NULL)
  {
@@ -365,17 +385,20 @@ unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, uns
   a = bwt[end];
   reversed[j] = a;
   j--;
-  printf("end=%d,a je %d=%c\n",end,a,a);
+  //printf("end=%d,a je %d=%c\n",end,a,a);
   character = get_alphabet_index(alphabet,a);
-  printf("pricom %d + %d\n",count_table[character],count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet));
+  //printf("pricom %d + %d\n",count_table[character],count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet));
   end = count_table[character]-1 + count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet);
   if (end>length){
-    printf("end je %d, length je %d\n",end,length);
+    //printf("end je %d, length je %d\n",end,length);
     end = end - length;
   }
   //printf("nova pozicia je %d\n",end);
  }
- printf("REVERSED JE\n%s\n",reversed);
+ reversed[length]='\0';
+ //printf("REVERSED JE\n%s\n",reversed);
+ //free(bwt);
+ return reversed;
 }
 
 void alphabet_decode (unsigned char *s, unsigned char * alphabet)
@@ -388,9 +411,6 @@ void alphabet_decode (unsigned char *s, unsigned char * alphabet)
  }
 }
 
-/*CAGGAGCCGGGTCAAGTCTTGCGCGCGTACCTTCGAAGCGGGCGAACAGGAAGCATGACTTCGGCTGGGCCCCGTCCCCACCGGGCACGCCGTAGAGGGGCAGGGTCATCGGCGCTTGAAAACTGGGGGAA
-TGGCCGGCCAGCGTTGCACGACGGGCGCGTTGTGATTAGGCGCCTAGGGGCTGGCCTTGCACCGCGCTCATTCAAGGGGAGACTACAAGACGAGGGCCCCCTCCACACTTGGCTGTAGGAACGTACCAGCTGC
-TCTTCCCAAGTCTGGAGGGGGGCCCGACTCGTAACTCCCATTCCGCACGGCCGGAAGCGACCGAGCGTGTCGGCAGCCCCGGCTGACGCATGAAACAACTCGATTGCGGAGACGCCTCAG*/
 unsigned char *reverseBWT(unsigned int length, unsigned int end, unsigned char*alphabet,unsigned int*count_table,unsigned char*bwt, unsigned int**occurence_table,unsigned int sample_OCC_size,unsigned char alphabetically_encoded)
 {
  int i = 0;
@@ -583,11 +603,12 @@ unsigned int*search_pattern_in_compressed_FM_index(struct compressedFMIndex *com
  return result;
 }
 
-unsigned int*approximate_search(int max_error, struct FMIndex *fm_index, char *pattern)
+unsigned int*approximate_search(unsigned int max_error, struct FMIndex *fm_index, unsigned char *pattern)
 {
  unsigned int pattern_length = strlen(pattern);
  unsigned int div_pattern_length = (pattern_length+1)/(max_error+1);
- unsigned int i,j; 
+ unsigned int j;
+ int i; 
  unsigned int *result;
  printf("%s dlzka vzoru je %d\n",pattern,pattern_length);
  unsigned char *patterns[max_error+1];
@@ -606,6 +627,35 @@ unsigned int*approximate_search(int max_error, struct FMIndex *fm_index, char *p
  {
   printf("%d. vzor je %s\n",i,patterns[i]);
   result = search_pattern(fm_index,patterns[i]);
+  printf("pozicie su %d az %d\n",result[0],result[1]);
+ }
+return result;
+}
+
+unsigned int*approximate_search_in_compressed_FM_index(unsigned int max_error, struct compressedFMIndex *compressed_fm_index, unsigned char *pattern, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
+{
+ unsigned int pattern_length = strlen(pattern);
+ unsigned int div_pattern_length = (pattern_length+1)/(max_error+1);
+ unsigned int j;
+ int i; 
+ unsigned int *result;
+ printf("%s dlzka vzoru je %d\n",pattern,pattern_length);
+ unsigned char *patterns[max_error+1];
+ for (i=0;i<max_error;i++)
+ {
+  patterns[i] = (unsigned char *)malloc(sizeof(unsigned char)*(div_pattern_length+1)); 
+  memcpy( patterns[i], &pattern[i*div_pattern_length], div_pattern_length);
+  patterns[i][div_pattern_length]= '\0';
+ } 
+ j = pattern_length-i*div_pattern_length;
+ patterns[i] = (unsigned char *)malloc(sizeof(unsigned char)*(j+1)); 
+ memcpy( patterns[i], &pattern[i*div_pattern_length], j);
+ patterns[i][j]= '\0';
+
+ for (i=max_error;i>=0;i--)
+ {
+  printf("%d. vzor je %s\n",i,patterns[i]);
+  result = search_pattern_in_compressed_FM_index(compressed_fm_index,patterns[i],flag_mtf,flag_runs,flag_huffman);
   printf("pozicie su %d az %d\n",result[0],result[1]);
  }
 return result;
@@ -787,4 +837,10 @@ void align(char *p1, char*p2, int error)
    printf("%s\n",alignment2);
    printf("errors: %d\n",alignment_length - p1length-1);
  }
+
+ free(alignment1);
+ free(alignment2);
+ for (i=0;i<=p1length;i++)
+  free(matrix[i]);
+ free(matrix);
 }

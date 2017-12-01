@@ -3,9 +3,32 @@
 #include <stdlib.h>
 #include "bwt.h"
 
-int *init_suffix_array(int *suffix_array,char *s,int genome_length)
+unsigned char*load_genome_from_file(unsigned char*file,unsigned int*genome_length)
 {
- int i;
+unsigned char * buffer;
+unsigned int length;
+FILE * f = fopen (file, "r");
+
+if (f)
+{
+  fseek (f, 0, SEEK_END);
+  length = ftell (f);
+  fseek (f, 0, SEEK_SET);
+  buffer = malloc (length);
+  if (buffer)
+  {
+    fread (buffer, 1, length, f);
+  }
+  fclose (f);
+}
+ buffer[length]='\0';
+ *genome_length = length;
+ return buffer;
+}
+
+unsigned int *init_suffix_array(unsigned int *suffix_array,unsigned char *s,unsigned int genome_length)
+{
+ unsigned int i;
  //initialize suffix array
  suffix_array = (int *) malloc(genome_length*sizeof(int));
  if (suffix_array == NULL)
@@ -21,14 +44,14 @@ int *init_suffix_array(int *suffix_array,char *s,int genome_length)
  return suffix_array;
 }
 
-int max(int number1, int number2)
+unsigned int max(unsigned int number1,unsigned int number2)
 {
  if (number1 < number2)
   return number2;
  else
   return number1;
 }
-int min(int number1, int number2)
+unsigned int min(unsigned int number1,unsigned int number2)
 {
  if (number1 > number2)
   return number2;
@@ -36,17 +59,49 @@ int min(int number1, int number2)
   return number1;
 }
 
+void reverse_string(unsigned char *str)
+{
+    /* skip null */
+    if (str == 0)
+    {
+        return;
+    }
+
+    /* skip empty string */
+    if (*str == 0)
+    {
+        return;
+    }
+
+    /* get range */
+    char *start = str;
+    char *end = start + strlen(str) - 1; /* -1 for \0 */
+    char temp;
+
+    /* reverse */
+    while (end > start)
+    {
+        /* swap */
+        temp = *start;
+        *start = *end;
+        *end = temp;
+
+        /* move */
+        ++start;
+        --end;
+    }
+}
 
 //helper function used when sorting rotations
-int compare_rotations(char *s, int start1, int start2, int genome_length)
+unsigned int compare_rotations(unsigned char *s,unsigned int start1,unsigned int start2,unsigned int genome_length)
 {
- int rotation_break1 = max(start1,start2) - min(start1,start2);
- int rotation_break2 = min(start1,start2);
- int real_length = genome_length - 1;
+ unsigned int rotation_break1 = max(start1,start2) - min(start1,start2);
+ unsigned int rotation_break2 = min(start1,start2);
+ unsigned int real_length = genome_length - 1;
  //printf("starty %d %d, rotbreak %d\n", start1,start2,rotation_break);
- int origin1 = start1;
- int origin2 = start2;
- int i = max(start1,start2);
+ unsigned int origin1 = start1;
+ unsigned int origin2 = start2;
+ unsigned int i = max(start1,start2);
  while (i!=real_length && s[start1]==s[start2])
  {
   i++;
@@ -108,11 +163,11 @@ int compare_rotations(char *s, int start1, int start2, int genome_length)
   }
 }
 
-int *insertion_sort_array(int *suffix_array, char *s, int genome_length)
+unsigned int *insertion_sort_array(unsigned int *suffix_array, unsigned char *s, unsigned int genome_length)
 {
- int i = 0;
- int j;
- int swap_temp;
+ unsigned int i = 0;
+ unsigned int j;
+ unsigned int swap_temp;
  while (i != genome_length)
  {
   j = i;
@@ -128,10 +183,10 @@ int *insertion_sort_array(int *suffix_array, char *s, int genome_length)
  return suffix_array;
 }
 
-char *create_bwt(int *suffix_array, char *s, int genome_length)
+unsigned char *create_bwt(unsigned int *suffix_array, unsigned char *s, unsigned int genome_length)
 {
- int i;
- char *bwt = (char *) malloc (genome_length * sizeof(char));
+ unsigned int i;
+ unsigned char *bwt = (unsigned char *) malloc (genome_length * sizeof(unsigned char));
  suffix_array = insertion_sort_array(suffix_array,s,genome_length); 
  for(i=0;i<genome_length;i++)
  {
