@@ -4,7 +4,6 @@
 #include "compression.h"
 
 
-
 struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char flag_mtf, unsigned char flag_runs,unsigned char flag_huffman, 
 	unsigned char*alphabet, unsigned char*bwt, unsigned int*length)
 {
@@ -1131,4 +1130,205 @@ void free_huffman_tree(struct huffman_node *node)
   free_huffman_tree(node->right);
   free(node);
  }
+}
+
+struct wavelet_tree *build_huffman_shaped_WT(unsigned char *s, unsigned char *alphabet, unsigned int *frequencies,unsigned int string_length)
+{
+ //build huffman tree of alphabet
+ struct huffman_node*root = build_huffman_tree(alphabet,frequencies,strlen(alphabet));
+ printf("huffman zostrojeny\n");
+ printf("retazec je %s\n",s);
+ printf("alphabet je %s\n",alphabet);
+ //build wavelet tree recursively from root
+ struct wavelet_tree *wt_root = build_WT_node(root,s,string_length);
+ printf("hotovp\n");
+ 
+ return wt_root;
+}
+
+//build wavelet tree node and its children
+struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s,unsigned int string_length)
+{
+ if (root->left == NULL && root->right==NULL)
+    return NULL;
+ unsigned char * left_alphabet = get_alphabet(root->left);
+ unsigned char * right_alphabet = get_alphabet(root->right);
+
+
+ unsigned long long int *bitvector = (unsigned long long int*)calloc(string_length/64+1,sizeof(unsigned long long int*));
+
+ unsigned char max_bits = sizeof(unsigned long long int)*8;
+ unsigned int word_index = 0;
+ unsigned char bit_index = 0;
+ unsigned int i;
+
+ for (i=0;i<string_length;i++)
+ {
+
+  if (bit_index==max_bits){
+    bit_index = 0;
+    word_index++;
+  }
+  if (in_alphabet(s[i],right_alphabet))
+  {
+    //zakoduj ako 1
+    bitvector[word_index] = bitvector[word_index] + 1;
+    bitvector[word_index] = bitvector[word_index]<<1;
+    bit_index++;
+  }
+  else if (in_alphabet(s[i],left_alphabet))
+  {
+    //zakoduj ako 0
+    bitvector[word_index] = bitvector[word_index]<<1;
+    bit_index++;
+  }
+ }
+ bitvector[word_index] = bitvector[word_index]<<(max_bits-bit_index-1);
+ bitvector = realloc(bitvector, (word_index+1)*sizeof(unsigned long long int));
+ printf("pouzilo sa %d bajtov\n",(word_index+1)*sizeof(unsigned long long int));
+ struct wavelet_tree* wt_node = (struct wavelet_tree*)malloc(sizeof(struct wavelet_tree));
+ wt_node->right_alphabet = right_alphabet;
+ wt_node->left_alphabet = left_alphabet;
+ wt_node->bitvector = bitvector;
+ if (root->left!=NULL)
+  wt_node->left = build_WT_node(root->left,s,string_length);
+ else
+  wt_node->left = NULL;
+ if (root->right!=NULL)
+  wt_node->right = build_WT_node(root->right,s,string_length);
+ else
+  wt_node->right = NULL;
+return wt_node;
+}
+
+unsigned char *get_alphabet(struct huffman_node*node)
+{
+ unsigned char *alphabet = NULL;
+ unsigned char *left_alphabet;
+ unsigned char *right_alphabet;
+ if(node->left==NULL && node->right==NULL)
+ {
+  alphabet = (unsigned char *)malloc(2);
+  alphabet[0] = node->symbol;
+  alphabet[1] = '\0';
+ }
+ else
+ {
+    left_alphabet = get_alphabet(node->left);
+    right_alphabet = get_alphabet(node->right);
+    const size_t left_alphabet_size = strlen(left_alphabet);
+    const size_t right_alphabet_size = strlen(right_alphabet);
+
+    alphabet = (unsigned char *)malloc(left_alphabet_size+right_alphabet_size+1);
+
+    memcpy(alphabet, left_alphabet, left_alphabet_size);
+  memcpy(alphabet+left_alphabet_size, right_alphabet, right_alphabet_size+1);
+ }
+ return alphabet;
+}
+
+unsigned char in_alphabet(unsigned char c, unsigned char *alphabet)
+{
+ unsigned char i;
+ for (i=0;i<strlen(alphabet);i++){
+  if (alphabet[i]==c)
+    return 1;
+ }
+
+ return 0;
+}
+
+unsigned char wt_access(unsigned int position, struct wavelet_tree *root)
+{
+ struct wavelet_tree* current = root;
+ unsigned int word_index = position/(sizeof(unsigned long long int)*8);
+ unsigned int bit_index = position-word_index*sizeof(unsigned long long int)*8;
+ 
+ //ak nie sme v liste, vypocita sa nova pozicia v potomkovi 
+ if (get_bit(current->bitvector[word_index],bit_index))
+ {
+  //treba zistit novu poziciu podla 1
+
+  if (strlen(root->right_alphabet)==1)
+  {
+   return root->right_alphabet[0];
+  }
+
+  return wt_access(count_set_bits(current->bitvector,position),current->right);
+ }
+
+ else
+ {
+ if (strlen(root->left_alphabet)==1)
+  {
+   return root->left_alphabet[0];
+  }
+
+  return wt_access(count_unset_bits(current->bitvector,position),current->left);
+ }
+}
+
+unsigned int count_set_bits(unsigned long long int*bitvector, unsigned int position)
+{
+ unsigned long long int remainder;
+ unsigned int count = 0;
+ unsigned int i = 0;
+ unsigned char maxbits = sizeof(unsigned long long int)*8;
+ while (position>=maxbits)
+  {
+   count = count + __builtin_popcount(bitvector[i++]);
+   position = position - maxbits;
+  }
+  remainder = bitvector[i] >> (maxbits - position);
+  count = count + __builtin_popcount(remainder);
+
+ return count;
+}
+
+unsigned int count_unset_bits(unsigned long long int*bitvector, unsigned int position)
+{
+ unsigned long long int remainder;
+ unsigned int count = 0;
+ unsigned int i = 0;
+ unsigned char maxbits = sizeof(unsigned long long int)*8;
+ while (position>=maxbits)
+  {
+   count = count + maxbits - __builtin_popcount(bitvector[i++]);
+   position = position - maxbits;
+  }
+  remainder = bitvector[i] >> (maxbits-position);
+  count = count + position - __builtin_popcount(remainder);
+
+ return count;
+}
+
+unsigned long long int get_bit(unsigned long long int var, unsigned int position)
+{
+return ((var) & (1LL<<(63-position)));
+}
+
+unsigned int wt_rank(unsigned char c, unsigned int position, struct wavelet_tree *root)
+{
+ struct wavelet_tree* current = root;
+ unsigned int count = 0;
+ if (current == NULL)
+ {
+  return position;
+ }
+ fflush(stdout);
+ //ak sa znak nachadza v lavej abecede spocitaju sa nuly inac 1
+ if (in_alphabet(c,current->left_alphabet))
+ {
+
+  count = count_unset_bits(current->bitvector,position);
+ }
+ else
+ {
+  count = count_set_bits(current->bitvector,position);
+ }
+ 
+ if (in_alphabet(c,current->left_alphabet))
+    return wt_rank(c,count,current->left);
+ else
+    return wt_rank(c,count,current->right);
 }
