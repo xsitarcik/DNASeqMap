@@ -13,6 +13,18 @@ struct FMIndex
  unsigned char alphabetically_encoded;
 };
 
+struct FMIndex_WT
+{
+unsigned int genome_length;
+unsigned int sample_SA_size;
+unsigned int sample_OCC_size;
+unsigned char *alphabet;
+unsigned int end;
+unsigned int *sampleSA;
+unsigned int *count_table;
+struct wavelet_tree *WT_root;
+};
+
 struct compressedFMIndex
 {
  unsigned int length;
@@ -29,6 +41,7 @@ struct compressedFMIndex
  struct compressed_block *array_of_blocks;
 };
 
+struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned int sample_SA_size, unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet);
 struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned int sample_SA_size,unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet);
 struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array,unsigned int sample_SA_size, unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet, 
   unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned int block_size);

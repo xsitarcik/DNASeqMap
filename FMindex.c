@@ -5,10 +5,41 @@
 #include "compression.h"
 #include <time.h>
 
+//create FM Index which uses wavelet tree to compress BWT string
+struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned int sample_SA_size, unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet)
+{
+ unsigned int i;
+ struct FMIndex_WT *FM_index_WT = (struct FMIndex_WT*) malloc(sizeof(struct FMIndex_WT));
+ 
+ //create count table and also create frequency table for huffman tree
+ FM_index_WT->count_table = create_count_table(bwt,genome_length,alphabet);
+ unsigned int*frequencies = (unsigned int*)malloc(sizeof(unsigned int)*strlen(alphabet));
+ clock_t begin = clock();
+ for (i=0;i<strlen(alphabet)-1;i++)
+  frequencies[i] = FM_index_WT->count_table[i+1] - FM_index_WT->count_table[i];
+ frequencies[i] = genome_length - FM_index_WT->count_table[i];
+
+ //store bwt in Huffman-shaped wavelet tree
+ FM_index_WT->WT_root = build_huffman_shaped_WT(bwt,alphabet,frequencies,genome_length,sample_OCC_size);
+  clock_t end = clock();
+ double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+ printf("construction of wavelet tree took %lf seconds", time_spent);
+ fflush(stdout);
+
+ FM_index_WT->sample_SA_size = sample_SA_size;
+ FM_index_WT->sample_OCC_size = sample_OCC_size;
+ FM_index_WT->alphabet = alphabet;
+ FM_index_WT->genome_length = genome_length;
+ FM_index_WT->end = find_end(suffix_array);
+ FM_index_WT->sampleSA = create_sample_SA(suffix_array,sample_SA_size,genome_length);
+ free(suffix_array);
+ return FM_index_WT;
+}
+
+//create base FM Index
 struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned int sample_SA_size, unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet)
 {
-  unsigned char bits_per_char = get_min_bits_per_char(alphabet);
-  printf("%s\n",bwt);
+ unsigned char bits_per_char = get_min_bits_per_char(alphabet);
  struct FMIndex *FM_index = (struct FMIndex*) malloc(sizeof(struct FMIndex));
  FM_index->bwt = bwt;
  FM_index->sample_SA_size = sample_SA_size;
@@ -23,11 +54,11 @@ struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned int sample_SA
  FM_index->alphabetically_encoded  = 0;
  alphabet_encode(FM_index->bwt,alphabet,genome_length);
  FM_index->alphabetically_encoded = 1;
- //FM_index->bwt = bit_pack(FM_index->bwt,genome_length,bits_per_char,&FM_index->bitvector_length);
- count_occ(FM_index->bwt,FM_index->occurence_table,41,2,2,sample_OCC_size);
+
  return FM_index;
 }
 
+//create FM Index using compressed BWT by MTF,RLE,Huffman
 struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, unsigned int sample_SA_size, unsigned int sample_OCC_size, unsigned int genome_length, unsigned char *bwt, unsigned char *alphabet, 
   unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned int block_size)
 {
@@ -53,6 +84,7 @@ struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, u
  printf("trvanie kompresie: %lf", time_spent);
  printf("pocet blkov je %d\n",compressed_FM_index->length);
  fflush(stdout);
+ 
  //huffman_decode(compressed_FM_index->array_of_blocks[0].bitvector,compressed_FM_index->array_of_blocks[0].huffman_tree,compressed_FM_index->array_of_blocks[0].block_size);
  /*count_occ_in_compressed_FMIndex(38, 'G',compressed_FM_index);
  count_occ_in_compressed_FMIndex(39, 'G',compressed_FM_index);
@@ -73,12 +105,13 @@ struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, u
  
  for (i=0;i<=compressed_FM_index->length;i++){
   count = count + (compressed_FM_index->array_of_blocks[i].bitvector_length+7)/8;
-  printf("DLZKA JE %d\n",compressed_FM_index->array_of_blocks[i].bitvector_length);
+  printf("bitvector length of %d block is %d\n",i,compressed_FM_index->array_of_blocks[i].bitvector_length);
  }
- printf("pocet bytov je %d a realne je %d\n",count,genome_length);
+ printf("bwt is stored in %d bytes, and has %d characters\n",count,genome_length);
  return compressed_FM_index;
 }
 
+//find "end" of BWT string, it means position of zero rotation in BWT
 unsigned int find_end(unsigned int *suffix_array)
 {
 unsigned int i = 0;
@@ -87,6 +120,7 @@ while(suffix_array[i]!=0)
 return i;
 }
 
+//procedure to sample input Suffix array according to input sample size
 unsigned int *create_sample_SA(unsigned int *suffix_array,unsigned int sample_size, unsigned int array_size)
 {
  int i = 0;
@@ -107,97 +141,79 @@ unsigned int *create_sample_SA(unsigned int *suffix_array,unsigned int sample_si
  return sampleSA; 
 }
 
-//procedure to get SA value from sample suffix array
+//procedure to get from sample suffix array  SA value corresponding to BWT position
+//when input position not in sample suffix array, use LFmapping until returned position in sample suffix array
 unsigned int get_SA_value(unsigned int bwt_position, unsigned char c, struct FMIndex *fm_index)
 {
- //printf("%c znak\n",c);
  unsigned int count = 0;
  unsigned char character;
- if (fm_index->alphabetically_encoded == 1)
+ if (fm_index->alphabetically_encoded)
   character = c;
  else
   character = get_alphabet_index(fm_index->alphabet,c);
  while(bwt_position%fm_index->sample_SA_size!=0)
  {
   c = fm_index->bwt[bwt_position];
-  //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
   bwt_position = last_to_first_encoded(c, bwt_position, fm_index->alphabet,fm_index->count_table,fm_index->bwt,fm_index->occurence_table,fm_index->sample_OCC_size);
   count++;
  }
- //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
  unsigned int result = fm_index->sampleSA[bwt_position/fm_index->sample_SA_size]+count;
  if (result>fm_index->length)
   result = result - fm_index->length;
- /*if (!(bwt_position)){
-  if (count)
-    return --count;
-  else 
-    return count;
-}*/
  return result;
 }
 
+//get original position from position in BWT
 unsigned int get_SA_value_compressed(unsigned int bwt_position, unsigned int length, unsigned int sample_SA_size, unsigned char *alphabet, unsigned int*sampleSA, 
   unsigned int *count_table,unsigned int block_size, struct compressed_block*block, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
 {
- //printf("%c znak\n",c);
  unsigned int count = 0;
  unsigned int index = bwt_position/block_size;
  unsigned int position;
  unsigned char c;
+
+ //until position of stored SA value is found, keep LFmapping position
  while(bwt_position%sample_SA_size!=0)
  {
   position = bwt_position - index*block_size;
   unsigned char *bwt = decompress_block(block[index].bitvector_length,block[index].bitvector,flag_mtf,flag_runs,flag_huffman,position+1,alphabet,block[index].huffman_tree);
   c = bwt[position];
   free(bwt);
-  //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
   bwt_position = last_to_first_in_compressed_FMIndex(c,bwt_position,alphabet,count_table,block, block_size, flag_mtf,flag_runs,flag_huffman);
-  //printf("**********-nova wt position %d znak %c, count %d\n",bwt_position,c,count);
-
   index = bwt_position/block_size;
   count++;
  }
-
- //printf("bwt position %d znak %c, count %d\n",bwt_position,c,count);
  unsigned int result = sampleSA[bwt_position/sample_SA_size]+count;
  if (result>=length)
   result = result - length;
- /*if (!(bwt_position)){
-  if (count)
-    return --count;
-  else 
-    return count;
-}*/
  return result;
 }
 
+//procedure of LF-mapping
 unsigned int last_to_first(unsigned char c, unsigned int bwt_position, unsigned char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table,unsigned int sample_OCC_size)
 {
  unsigned char character = get_alphabet_index(alphabet,c);
  unsigned int last = count_table[character] + count_occ(bwt,occurence_table,bwt_position,c,character,sample_OCC_size);
- //printf("predchodca rotacie %d je %d\n",bwt_position,last);
  return last;
 }
 
-
+//procedure of LF-mapping in compressed BWT
 unsigned int last_to_first_in_compressed_FMIndex(unsigned char c, unsigned int bwt_position, unsigned char*alphabet, unsigned int* count_table,struct compressed_block *block, unsigned int block_size, 
   unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
 {
  unsigned int character = get_alphabet_index(alphabet,c);
  unsigned int last = count_table[character] + count_occ_in_compressed_FMIndex(block,block_size,bwt_position,c,flag_mtf, flag_runs, flag_huffman, alphabet);
- //printf("predchodca rotacie %d je %d\n",bwt_position,last);
  return last;
 }
 
+//procedure of LF-mapping in BWT string encoded to indexes in alphabet
 unsigned int last_to_first_encoded(unsigned char c, unsigned int bwt_position, unsigned char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table,unsigned int sample_OCC_size)
 {
  unsigned int last = count_table[c] + count_occ(bwt,occurence_table,bwt_position,c,c,sample_OCC_size);
- //printf("predchodca rotacie %d je %d\n",bwt_position,last);
  return last;
 }
 
-
+//procedure which creates count table of FM Index for input string and alphabet
 unsigned int *create_count_table(unsigned char *s, unsigned int string_length, unsigned char* alphabet)
 {
  unsigned int alphabet_size = strlen(alphabet);
@@ -227,6 +243,7 @@ unsigned int *create_count_table(unsigned char *s, unsigned int string_length, u
  return count_table;
 }
 
+//procedure which creates sampled 2D occurence table for input string and alphabet
 unsigned int **create_occurence_table(unsigned char *s, unsigned int string_length, unsigned char *alphabet, unsigned int sample_size)
 {
  unsigned int alphabet_size = strlen(alphabet);
@@ -240,15 +257,17 @@ unsigned int **create_occurence_table(unsigned char *s, unsigned int string_leng
   occurence_table[i] = (unsigned int *)malloc((samples_count+1)*sizeof(unsigned int));
   if (occurence_table[i]==NULL)
   {
-   //printf("Error. No memory when allocating occurence table\n");
+   printf("Error. No memory when allocating occurence table\n");
    exit(1);
   }
  }
+
  //initialize number of occurences at zero position
  for (i=0;i<alphabet_size;i++)
  {
    occurence_table[i][0] = 0;
  }
+
  for (i=0;i<string_length;i++)
  {
   index = (i+sample_size-1)/sample_size;
@@ -262,52 +281,45 @@ unsigned int **create_occurence_table(unsigned char *s, unsigned int string_leng
  return occurence_table;
 }
 
+//procedure of FM Index for getting count of occurences of char c upto input position
+//procedure uses sampled occurence table
 unsigned int count_occ(unsigned char *s, unsigned int **occurence_table, unsigned int position, unsigned char c, unsigned char character, unsigned int sample_size)
 {
  unsigned int count = 0;
- //printf("hladam pre %d, c je %d, char je %d\n",position,c,character);
-
  unsigned int a = position/sample_size;
  unsigned int bound = position - (a * sample_size);
- //printf("dolne bound je %d, pos je %d\n",bound,position);
  while (bound>0)
  {
   bound--;
   position--;
-  //printf("pos %d znak %d %d, akt count je %d\n",position, s[position],c,count);
   if (s[position]==c)
    count++;
  }
- //printf("count je %d, position je %d\n",count,position);
  if (s[position]==c)
    count--;
- //printf("do %d je pocet %c rovny %d, count=%d occ=%d\n",position,c,occurence_table[character][position/sample_size]+count,occurence_table[character][position/sample_size],count);
- //printf("vraciam %d + %d\n",occurence_table[character][position/sample_size],count);
- return occurence_table[character][position/sample_size]+count;
+return occurence_table[character][position/sample_size]+count;
 }
 
+//procedure of FM Index for getting count of occurences of char c upto input position when BWT is compressed in blocks
 unsigned int count_occ_in_block(struct compressed_block *block, unsigned int position,unsigned char c,unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned char*alphabet)
 {
  unsigned int i;
  unsigned int count = 0;
  unsigned int alphabet_index = get_alphabet_index(alphabet,c);
  unsigned int occurences = block->occurences[alphabet_index];
- //printf("occ %d je %d\n",c,occurences);
-
  unsigned char *bwt = decompress_block(block->bitvector_length,block->bitvector,flag_mtf,flag_runs,flag_huffman,position,alphabet,block->huffman_tree);
  for (i=0;i<position;i++)
   if (bwt[i] == c)
     count++;
- //printf("\nvraciam %d  + %d\n",occurences,count);
  free(bwt);
  return (occurences+count);
 }
+
 
 unsigned int count_occ_in_compressed_FMIndex(struct compressed_block *block, unsigned int block_size, unsigned int position, unsigned char c, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned char*alphabet)
 {
  unsigned int index = position/block_size;
  unsigned int remainder = position - index*block_size; //faster than modulo ?
- //printf("pozeram index %d a rem %d,block_size %d pre poziciu %d\n",index,remainder,block_size,position);
  return count_occ_in_block(&block[index],remainder,c,flag_mtf, flag_runs, flag_huffman, alphabet);
 }
 
@@ -316,10 +328,8 @@ unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, u
   unsigned int index = position/block_size;
   unsigned int start = index*block_size;
   int count = 0;
-  //printf("index je %d, start je %d, position %d, c je %c\n",index,start,position,c);
   while (start<position)
   {
-    //printf("start=%d, c = %c\n",start,bwt[start]);
     if (bwt[start]==c)
       count++;
     start++;
@@ -327,10 +337,10 @@ unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, u
   if (bwt[position]==c)
       count++;
   unsigned char a = get_alphabet_index(alphabet,c);
-  //printf("occ %d + count %d\n",block[index].occurences[a],count);
   return (block[index].occurences[a]+count);
 }
 
+//procedur which inplace decompresses BWT of FM Index
 unsigned char *decompress_FMIndex(struct compressedFMIndex *compressed_FM_index)
 {
  unsigned int i, index = 0;
@@ -353,19 +363,16 @@ unsigned char *decompress_FMIndex(struct compressedFMIndex *compressed_FM_index)
   index = index + cb->block_size;
   //free(compressed_FM_index->array_of_blocks[i].occurences);
   free(compressed_FM_index->array_of_blocks[i].bitvector); 
-
-  //printf("\n");
-  
  }
  bwt[index]='\0';
  //printf("velkost bwt je %d\n",index);
  //printf("%s\n",bwt);
- 
 //printf("Reversing .... \n");
 //return reverseBWT_compressed(bwt,index,compressed_FM_index->end,compressed_FM_index->count_table, alphabet,block_size,compressed_FM_index->array_of_blocks,flag_mtf,flag_runs,flag_huffman);
 return 0;
 }
 
+//procedure used for reversing BWT which is compressed
 unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, unsigned int end, unsigned int* count_table, unsigned char*alphabet, 
   unsigned int block_size, struct compressed_block *block, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
 {
@@ -401,6 +408,7 @@ unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int length, uns
  return reversed;
 }
 
+//procedure which decode string of numbers to string of chars according to indexes of alphabet
 void alphabet_decode (unsigned char *s, unsigned char * alphabet)
 {
  unsigned int string_length = strlen(s);
@@ -411,6 +419,7 @@ void alphabet_decode (unsigned char *s, unsigned char * alphabet)
  }
 }
 
+//procedure used for reversing BWT
 unsigned char *reverseBWT(unsigned int length, unsigned int end, unsigned char*alphabet,unsigned int*count_table,unsigned char*bwt, unsigned int**occurence_table,unsigned int sample_OCC_size,unsigned char alphabetically_encoded)
 {
  int i = 0;
@@ -446,7 +455,7 @@ unsigned char *reverseBWT(unsigned int length, unsigned int end, unsigned char*a
 return reversed;
 }
 
-
+//aux. procedure for getting index of char in alphabet
 unsigned int get_alphabet_index(unsigned char *alphabet, unsigned char c)
 {
  int i = 0;
@@ -506,6 +515,7 @@ void print_info_fm_index(struct FMIndex *fm_index)
  print_occurence_table(fm_index);
 }
 
+//procedure for searching pattern in BWT of FM Index
 unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern)
 {
  unsigned int*result=(unsigned int*)malloc(2*sizeof(unsigned int));
@@ -515,13 +525,13 @@ unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern)
  unsigned int pattern_length = strlen(pattern);
  int j = pattern_length - 1;
  int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
- printf("prvy znak %c index %d\n",pattern[j],alphabet_index);
+ //printf("prvy znak %c index %d\n",pattern[j],alphabet_index);
  result[0] = count_table[alphabet_index];
  if (alphabet_index!=alphabet_size)
   result[1] = count_table[alphabet_index + 1]-1;
  else 
   result[1] = fm_index->length-1;
- printf("rozsah je %d az %d \n",result[0],result[1]);
+ //printf("rozsah je %d az %d \n",result[0],result[1]);
  while (j>0 && result[0]<result[1])
  {
   j--;
@@ -538,16 +548,15 @@ unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern)
  test++;
  }
  */
- printf("rozsah je %d az %d \n",result[0],result[1]);
 
  }
  if (j>0 && result[0]>=result[1])
   result[1]--;
-
- //printf("vraciam %d %d\n",result[0],result[1]);
+ printf("Range of positions of pattern are %d to %d \n",result[0],result[1]);
  return result;
 }
 
+//procedure for searching pattern in compressed BWT of FM Index
 unsigned int*search_pattern_in_compressed_FM_index(struct compressedFMIndex *compressed_fm_index, char *pattern,unsigned char flag_mtf,unsigned char flag_runs, unsigned char flag_huffman)
 {
  unsigned int*result=(unsigned int*)malloc(2*sizeof(unsigned int));
@@ -571,7 +580,6 @@ unsigned int*search_pattern_in_compressed_FM_index(struct compressedFMIndex *com
  {
   j--;
   alphabet_index = get_alphabet_index(alphabet,pattern[j]);
-  //printf("%d-ty znak %c index %d\n",j,pattern[j],alphabet_index);
   
   result[0] = count_table[alphabet_index] + count_occ_in_compressed_FMIndex(compressed_fm_index->array_of_blocks,block_size,result[0],pattern[j],flag_mtf,flag_runs,flag_huffman,alphabet);
   result[1] = count_table[alphabet_index] + count_occ_in_compressed_FMIndex(compressed_fm_index->array_of_blocks,block_size,result[1],pattern[j],flag_mtf,flag_runs,flag_huffman,alphabet);
@@ -584,25 +592,25 @@ unsigned int*search_pattern_in_compressed_FM_index(struct compressedFMIndex *com
  test++;
  }
  */
- printf("rozsah je %d az %d \n",result[0],result[1]);
+
 
  }
  if (j>0 && result[0]>=result[1])
   result[1]--;
  
- unsigned int test = result[0];
+ printf("rozsah je %d az %d \n",result[0],result[1]);
+ /*unsigned int test = result[0];
  while (test<result[1])
  {
   printf("*************************************\n");
  printf("hladam test %d, gl %d\n",test,compressed_fm_index->genome_length);
  printf("sa value %d je %d\n",test,get_SA_value_compressed(test, compressed_fm_index->genome_length,  compressed_fm_index->sample_SA_size, alphabet,compressed_fm_index->sampleSA,count_table,block_size, compressed_fm_index->array_of_blocks, flag_mtf, flag_runs, flag_huffman));
  test++;
- }
-
- //printf("vraciam %d %d\n",result[0],result[1]);
+ }*/
  return result;
 }
 
+//procedure which breaks input pattern and search each separately in FM Index
 unsigned int*approximate_search(unsigned int max_error, struct FMIndex *fm_index, unsigned char *pattern)
 {
  unsigned int pattern_length = strlen(pattern);
@@ -632,6 +640,7 @@ unsigned int*approximate_search(unsigned int max_error, struct FMIndex *fm_index
 return result;
 }
 
+//procedure which breaks input pattern and search each separately in compressed FM index
 unsigned int*approximate_search_in_compressed_FM_index(unsigned int max_error, struct compressedFMIndex *compressed_fm_index, unsigned char *pattern, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
 {
  unsigned int pattern_length = strlen(pattern);
@@ -661,6 +670,7 @@ unsigned int*approximate_search_in_compressed_FM_index(unsigned int max_error, s
 return result;
 }
 
+//procedure for calculating square of dynamic programming matrix
 unsigned int calculate(int i, int j, int k)
 {
  unsigned int ret_value;
@@ -680,6 +690,7 @@ unsigned int calculate(int i, int j, int k)
   return ret_value;
 }
 
+//procedure for getting score of 2 characters of 2 strings
 unsigned int score(char a, char b)
 {
   if (a==b)
@@ -688,6 +699,7 @@ unsigned int score(char a, char b)
     return -1;
 }
 
+//procedure which returns max value in array
 unsigned int get_max_array(unsigned char* array, unsigned int length)
 {
  unsigned int i, max = 0, maxIndex = 0;
@@ -702,6 +714,7 @@ unsigned int get_max_array(unsigned char* array, unsigned int length)
  return maxIndex;
 }
 
+//procedure which returns direction of previous value in dynamic programming matrix
 unsigned char get_nearest_max(unsigned char i, unsigned char j, unsigned char k)
 {
  if (i>=j)
@@ -716,6 +729,7 @@ unsigned char get_nearest_max(unsigned char i, unsigned char j, unsigned char k)
    return 3;
 }
 
+//procedure for aligning two strings up to max error
 void align(char *p1, char*p2, int error)
 {
  unsigned char **matrix;
@@ -811,7 +825,7 @@ void align(char *p1, char*p2, int error)
     }
 
    }
-   printf("%d i je %d, c %d %d\n",nearestMax,i,currentX,currentY);
+   //printf("%d i je %d, c %d %d\n",nearestMax,i,currentX,currentY);
    if (currentX==1)
    {
     if (currentY==1){

@@ -32,18 +32,20 @@ struct wavelet_tree
  unsigned char *left_alphabet;
  unsigned char *right_alphabet;
  unsigned long long int *bitvector;
+ unsigned int *bitcount_table;
 };
 
 
-struct wavelet_tree *build_huffman_shaped_WT(unsigned char *s, unsigned char *alphabet, unsigned int *frequencies,unsigned int string_length);
-struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s,unsigned int string_length);
+struct wavelet_tree *build_huffman_shaped_WT(unsigned char *s, unsigned char *alphabet, unsigned int *frequencies,unsigned int string_length,unsigned int sample_occ_size);
+struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s,unsigned int string_length,unsigned int sample_occ_size);
 unsigned long long int get_bit(unsigned long long int var, unsigned int position);
 unsigned char *get_alphabet(struct huffman_node*node);
 unsigned char in_alphabet(unsigned char c, unsigned char *alphabet);
-unsigned int wt_rank(unsigned char c, unsigned int position, struct wavelet_tree *root);
-unsigned char wt_access(unsigned int position, struct wavelet_tree *root);
-unsigned int count_set_bits(unsigned long long int*bitvector, unsigned int position);
-unsigned int count_unset_bits(unsigned long long int*bitvector, unsigned int position);
+unsigned int wt_rank(unsigned char c, unsigned int position, struct wavelet_tree *root, unsigned int sample_occ_size);
+unsigned char wt_access(unsigned int position, struct wavelet_tree *root, unsigned int sample_occ_size);
+unsigned int count_set_bits(unsigned long long int*bitvector, unsigned int position, unsigned int sample_occ_size, unsigned int* bitcount_table);
+unsigned int count_unset_bits(unsigned long long int*bitvector, unsigned int position, unsigned int sample_occ_size, unsigned int* bitcount_table);
+unsigned int* build_bitcount_table(unsigned long long int *bitvector, unsigned int bitvector_length, unsigned int sample_occ_size);
 
 
 struct compressed_block *compress_FMIndex(unsigned int block_size, unsigned char flag_mtf, unsigned char flag_runs,unsigned char flag_huffman, 
