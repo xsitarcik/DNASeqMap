@@ -75,3 +75,7 @@ unsigned int count_occ_in_block(struct compressed_block *block, unsigned int pos
 unsigned int count_occ_in_compressed_FMIndex(struct compressed_block *block, unsigned int block_size, unsigned int position, unsigned char c, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned char*alphabet);
 unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, unsigned char*bwt,unsigned int block_size, unsigned int position, unsigned char c, unsigned char*alphabet);
 unsigned int*search_pattern_in_compressed_FM_index(struct compressedFMIndex *compressed_fm_index, char *pattern,unsigned char flag_mtf,unsigned char flag_runs, unsigned char flag_huffman);
+unsigned int*search_pattern_in_FM_index_WT(struct FMIndex_WT *FM_index_WT, char *pattern);
+long long int approximate_search_in_FM_index_WT(unsigned int max_error, struct FMIndex_WT *FM_index_WT, unsigned char *pattern);
+unsigned int get_SA_value_WT(unsigned int bwt_position, struct FMIndex_WT *fm_index_wt);
+unsigned int last_to_first_WT(unsigned char c, unsigned int bwt_position, struct wavelet_tree *wtree_root,unsigned int *count_table,unsigned int sample_OCC_size, unsigned char *alphabet);

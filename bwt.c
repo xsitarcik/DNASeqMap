@@ -32,7 +32,7 @@ unsigned int *init_suffix_array(unsigned int *suffix_array,unsigned char *s,unsi
 {
  unsigned int i;
  //initialize suffix array
- suffix_array = (int *) malloc(genome_length*sizeof(int));
+ suffix_array = (unsigned int *) malloc(genome_length*sizeof(unsigned int));
  if (suffix_array == NULL)
  {
   printf("Error when allocating memory for suffix array\n");

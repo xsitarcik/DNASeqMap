@@ -11,11 +11,17 @@ unsigned int genome_length;
 
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
-unsigned int sample_OCC_size = 256;
-unsigned int sample_SA_size = 32;
+unsigned int sample_OCC_size = 10;
+unsigned int sample_SA_size = 1;
+
+//program parameters
+unsigned char save = 0;
+unsigned char *save_name = "bwt.txt";
+unsigned char load = 1;
+unsigned char *load_name = "bwt.txt";
 
 //for compression
-unsigned int block_size = 1000;
+unsigned int block_size = 15000;
 unsigned char flag_compress = 0;
 unsigned char flag_runs = 7;
 unsigned char flag_mtf = 1;
@@ -23,7 +29,7 @@ unsigned char flag_huffman = 1;
 unsigned char flag_wavelet_tree = 1;
 
 //for string matching
-unsigned char max_errors=0;
+unsigned char max_errors=2;
 
 int main ( int argc, char *argv[] )
 {
@@ -32,22 +38,66 @@ int main ( int argc, char *argv[] )
  unsigned int *sample_SA = NULL;
  unsigned char *genome; 
  unsigned char *bwt = NULL;
+ unsigned char c;
  unsigned int *bitvector_length;
  struct FMIndex *FM_index = NULL;
  struct compressedFMIndex *compressed_FM_index = NULL;
  struct FMIndex_WT *FM_index_WT = NULL;
  unsigned char *alphabet = "ACGT";
  unsigned char*filename = "test.txt";
- 
+ FILE *fp;
+
  /*
  for (i=0;i<argc;i++)
  {
   printf("%s\n",argv[i]);
  }*/
  
- //load main string from file
- genome = load_genome_from_file(filename,&genome_length);
+
+ if (load)
+ {
+  fp = fopen(load_name,"r");
+  if (fp) {
+   printf("...loading BWT from file %s... \n",load_name);
+   genome_length = 0;
+   fscanf (fp, "%u\n", &genome_length); 
+   bwt = (unsigned char*)malloc(sizeof(unsigned char)*genome_length+1);
+   fread (bwt, 1, genome_length, fp);
+   bwt[genome_length]='\0';
+    
+   getc(fp);//read newline
+   suffix_array = (unsigned int*)malloc(sizeof(unsigned int)*genome_length);
+   for (i=0;i<genome_length;i++)
+    fscanf (fp, "%u,", &suffix_array[i]);
+   fclose(fp);
+  }
+ }
+ else 
+ {
+  //load main string from file
+  genome = load_genome_from_file(filename,&genome_length);
+  if (genome_length<=1)
+  {
+   printf("Error when reading file: %s\n",filename);
+   exit(-1);
+  }
+  else
+  printf("Size of read genome is %d characters\n",genome_length);
+
+  //create suffix array and bwt of main input string
+  clock_t begin = clock();
+  printf("...constructing BWT...\n");
+  suffix_array = init_suffix_array(suffix_array,genome, genome_length);
+  bwt = create_bwt(suffix_array,genome,genome_length);
+  clock_t end = clock();
+  double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+  printf("construction of BWT took: %lf seconds\n", time_spent);
+  free(genome); 
+  fflush(stdout);
+ }
  
+ 
+
  //reverse_string(genome);
 
  //should handle cases like:
@@ -57,40 +107,37 @@ int main ( int argc, char *argv[] )
  // so together 6n bytes at least, 
  // if its not sufficient, break origin string
 
- //create suffix array and bwt of main input string
-clock_t begin = clock();
-printf("...constructing BWT...");
-suffix_array = init_suffix_array(suffix_array,genome, genome_length);
-bwt = create_bwt(suffix_array,genome,genome_length);
-clock_t end = clock();
-double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-printf("construction of BWT took: %lf seconds", time_spent);
-free(genome); 
-fflush(stdout);
- /*
-   //save created BWT in file
-    FILE *fp;
-    fp = fopen("bwt.txt","w");
-    if(fp == NULL)
-    {
-        printf("\nSorry! Couldn't Create File");
-        exit(-1);
-    }
-    fprintf(fp,"%s",bwt);
-    fclose(fp);
-    */
+ 
+ 
+//save created BWT in file
+if (save)
+{
+ fp = fopen(save_name,"w");
+ if(fp == NULL)
+ {
+  printf("\nProblem when creating file %s for saving index!",save_name);
+  exit(-1);
+ }
+ fprintf(fp,"%u\n",genome_length);
+ fprintf(fp,"%s\n",bwt);
+ //fprintf(fp,"");
+ for (i=0;i<genome_length;i++)
+  fprintf(fp,"%u,",suffix_array[i]);
+    
+ fclose(fp);
+ }
 
 
  //build FMIndex and free suffix_array AND GENOME (to do)
  if (flag_compress)
  {
   compressed_FM_index = build_compressed_FM_index(suffix_array,sample_SA_size, sample_OCC_size, genome_length,bwt,alphabet,flag_mtf, flag_runs, flag_huffman, block_size);
-  
-  /*int*result = approximate_search_in_compressed_FM_index(max_errors,compressed_FM_index,"TATTATATTAATTATCATCCTAACTGAGG",flag_mtf,flag_runs,flag_huffman);
+   printf("ide sa na vypocet\n");
+   fflush(stdout);
+  int*result = approximate_search_in_compressed_FM_index(max_errors,compressed_FM_index,"TAATCGGTGGGAGTATTCAACGTGATGAAGAC",flag_mtf,flag_runs,flag_huffman);
   printf("results: %d %d\n",result[0],result[1]);
   printf("ide sa na vypocet\n");
   fflush(stdout);
-  printf("wata %d",__builtin_popcount(500));*/
   
 
   /*clock_t begin2 = clock();
@@ -116,11 +163,19 @@ fflush(stdout);
   free(compressed_FM_index->count_table);
   free(compressed_FM_index->sampleSA);
   free(compressed_FM_index);
+}
 
-
- }
  else if (flag_wavelet_tree){
+
+  //build FM Index with WT for backward search
   FM_index_WT = build_FM_index_WT(suffix_array,sample_SA_size,sample_OCC_size,genome_length,bwt,alphabet);
+  printf("...approximate searching...");
+  long long int result = approximate_search_in_FM_index_WT(max_errors,FM_index_WT,"CGTATCTCGATTGCTCAGTCGCTTTTCGTACTGCGCG");
+  printf("result e %lld\n",result);
+  //build FM Index with WT for forward search
+   //..
+//CGTAACTCG-TT GCTCAGTCGCTTT TCGTACTGCGCG -2errors
+//CGTATCTCGATT GCTCAGTCGCTTT TCGTACTGCGCG withour error
   /*
   clock_t begin1 = clock();
   for (i=0;i<genome_length;i++){
