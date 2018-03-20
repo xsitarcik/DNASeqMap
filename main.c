@@ -12,13 +12,17 @@ unsigned int genome_length;
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
 unsigned int sample_OCC_size = 10;
-unsigned int sample_SA_size = 1;
+unsigned int sample_SA_size = 8;
 
 //program parameters
 unsigned char save = 0;
 unsigned char *save_name = "bwt.txt";
 unsigned char load = 1;
 unsigned char *load_name = "bwt.txt";
+
+unsigned char*filename_text = "test.txt";
+unsigned char*filename_patterns = "patterns.txt";
+unsigned int MAX_READ_LENGTH = 50;
 
 //for compression
 unsigned int block_size = 15000;
@@ -44,9 +48,9 @@ int main ( int argc, char *argv[] )
  struct compressedFMIndex *compressed_FM_index = NULL;
  struct FMIndex_WT *FM_index_WT = NULL;
  unsigned char *alphabet = "ACGT";
- unsigned char*filename = "test.txt";
  FILE *fp;
-
+ FILE *fh_patterns;
+ char *pattern = (char*)malloc(sizeof(char)*MAX_READ_LENGTH);
  /*
  for (i=0;i<argc;i++)
  {
@@ -75,10 +79,10 @@ int main ( int argc, char *argv[] )
  else 
  {
   //load main string from file
-  genome = load_genome_from_file(filename,&genome_length);
+  genome = load_genome_from_file(filename_text,&genome_length);
   if (genome_length<=1)
   {
-   printf("Error when reading file: %s\n",filename);
+   printf("Error when reading file: %s\n",filename_text);
    exit(-1);
   }
   else
@@ -96,7 +100,12 @@ int main ( int argc, char *argv[] )
   fflush(stdout);
  }
  
- 
+ fh_patterns = fopen(filename_patterns,"r");
+ if (!(fh_patterns))
+ {
+  printf("Error when loading patterns from file %s\n",filename_patterns);
+  exit(-1);
+ }
 
  //reverse_string(genome);
 
@@ -169,15 +178,33 @@ if (save)
 
   //build FM Index with WT for backward search
   FM_index_WT = build_FM_index_WT(suffix_array,sample_SA_size,sample_OCC_size,genome_length,bwt,alphabet);
-  printf("...approximate searching...");
-  long long int result = approximate_search_in_FM_index_WT(max_errors,FM_index_WT,"CGTATCTCGATTGCTCAGTCGCTTTTCGTACTGCGCG");
-  printf("result e %lld\n",result);
+
+  for(i=0;i<100;i++){
+  printf("%c", wt_access(i, FM_index_WT->WT_root, sample_OCC_size));  
+  }
+  printf("\n");
+ 
+  printf("--------------------------------------\n");
+ 
+  printf("...approximate searching...\n");
+  clock_t begin1 = clock();
+  while (fgets(pattern, MAX_READ_LENGTH, fh_patterns) != NULL) {
+    pattern[strlen(pattern)-1]='\0';
+    printf("--%s--\n", pattern);
+    approximate_search_in_FM_index_WT(max_errors,FM_index_WT,pattern);
+  }
+  clock_t end1 = clock();
+  double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
+  printf("It took %lf seconds\n", time_spent1);
+
+  //long long int result = approximate_search_in_FM_index_WT(max_errors,FM_index_WT,"TCGATTATATCACTTAATGACTTTTGGGTCAGGGTGTGTTACCTTACAGGAATTGAGACCGTCCATTAATTTCTCTTGCATTTAT");
+  //printf("result je %lld\n",result);
   //build FM Index with WT for forward search
    //..
 //CGTAACTCG-TT GCTCAGTCGCTTT TCGTACTGCGCG -2errors
 //CGTATCTCGATT GCTCAGTCGCTTT TCGTACTGCGCG withour error
   /*
-  clock_t begin1 = clock();
+  
   for (i=0;i<genome_length;i++){
    wt_access(i,FM_index_WT->WT_root,sample_OCC_size);
    //printf("na pozicii %d je znak %c\n",i,wt_access(i,FM_index_WT->WT_root,sample_OCC_size));
