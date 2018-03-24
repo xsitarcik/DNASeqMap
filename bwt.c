@@ -27,6 +27,119 @@ if (f)
  return buffer;
 }
 
+//procedura na zotriedenie a zlucenie casti
+void topDownMerge(char *s,unsigned int *positions, unsigned int begin, unsigned int mid, unsigned int end, unsigned int *pomocnePole, unsigned int length){
+  unsigned int i = begin,j = mid,k;
+  for (k = begin; k < end; k++) {
+
+    if(i < mid && (j >= end || (porovnaj(s,positions[i],positions[j],length)))) {
+      pomocnePole[k] = positions[i];
+            i = i + 1;
+        } else {
+            pomocnePole[k] = positions[j];
+            j = j + 1;    
+        }
+    }
+}
+
+//procedura na rozdelenie na dve casti, ktore sa zotriedia a zlucia
+//vyuzitie openMP, vytvorenie paralelnej sekcie pre kazde rozdelenie
+void topDownSplitMerge (char *s,unsigned int *positions, unsigned int begin, unsigned int end, unsigned int *pomocnePole, unsigned int length){
+  unsigned int mid;
+  if ((end - begin) < 2)
+    return;
+  else {
+  mid = (end + begin) / 2;
+  #pragma omp parallel sections
+        {
+        #pragma omp section
+  topDownSplitMerge(s,positions, begin, mid, pomocnePole,length);
+    #pragma omp section
+  topDownSplitMerge(s,positions, mid, end, pomocnePole,length);  
+  }
+  topDownMerge(s,positions, begin, mid, end, pomocnePole,length);  
+  copyArr(pomocnePole,begin,end,positions);
+  }
+}
+
+//procedura na prekopirovania hodnot pola do druheho pola
+void copyArr(unsigned int src[], unsigned int begin, unsigned int end, unsigned int dest[]){
+    long long int i;
+  #pragma omp parallel for
+  for(i = begin; i < end; i++)
+        dest[i] = src[i];
+}
+
+//procedura na triedenie zlucovanim
+void mergeSort(char*s,unsigned int *positions,unsigned int size){
+  unsigned int *pomocnePole = (unsigned int*)malloc(size*sizeof(unsigned int));
+  omp_set_num_threads(2);
+  topDownSplitMerge(s,positions, 0, size, pomocnePole,size);
+  free(pomocnePole);
+}
+
+unsigned int porovnaj(char *s,unsigned int pos1, unsigned int pos2,  unsigned int length){
+  unsigned int i,a,b,e=0;
+  a = pos1;
+  b = pos2;
+  //zistenie ktora pozicia rotacie je blizsia ku koncu retazca
+  if ((length-pos1)>(length-pos2)){
+    //porovnavaju sa znaky po koniec retazca
+    for (i=0;i<length-pos2;i++){
+      if (s[a]!=s[b]){
+        e = 1;
+        break;
+      }
+      //ak su znaky na danych poziciach rovnake, inkrementujeme pozicie
+      a++;
+      b++;
+    }
+    //ak porovnavana pozicia dosiahne koniec retazca
+    if (e==0){
+      b = 0; //nastavi sa na nulu
+      for (i=0;i<pos1;i++){
+        if (s[a]!=s[b])
+          break;
+        a++;
+        //ak aj druha porovnavana pozicia dosiahne koniec retazca, nastavi sa na nulu
+        if (a==length) 
+          a = 0;
+        b++;
+      }
+    }
+  }
+  //rovnaky postup
+  else {
+    for (i=0;i<length-pos1;i++){
+      if (s[a]!=s[b]){
+        e = 1;
+        break;
+      }
+      a++;
+      b++;
+    }
+    if (e==0){
+      a = 0;
+      for (i=0;i<pos2;i++){
+        if (s[a]!=s[b])
+          break;
+        a++;
+        b++;
+        if (b==length)
+          b = 0;
+      }
+    }
+  }
+  
+  //vrati 0 ak rotacia zacinajuca na pos1 je lexikograficky vacsia
+  //vrati 1 ak rotacia zacinajuca na pos1 je lexikograficky mensia alebo rovna
+  if (s[a]>s[b])
+    return 0;
+  else {
+    return 1;
+  }
+}
+
 //auxiliary method for initiazing array of indexes, which would represent starting positions of rotations
 unsigned int *init_suffix_array(unsigned int *suffix_array,unsigned char *s,unsigned int genome_length)
 {
@@ -197,12 +310,20 @@ unsigned int *insertion_sort_array(unsigned int *suffix_array, unsigned char *s,
  return suffix_array;
 }
 
+//inicializovanie pola positions, kazda hodnota urcuje zaciatocnu poziciu rotacie
+//nasledne zotriedenie tohto pola, pricom sa porovnavaju rotacie retazca zacinajuce na tychto poziciach
+unsigned int * mergesort_SA(unsigned int *suffix_array, char *s, unsigned int length){
+  mergeSort(s,suffix_array,length);
+  return suffix_array;
+}
+
 //procedure for constructing BWT of input string
 unsigned char *create_bwt(unsigned int *suffix_array, unsigned char *s, unsigned int genome_length)
 {
  unsigned int i;
  unsigned char *bwt = (unsigned char *) malloc (genome_length * sizeof(unsigned char));
- suffix_array = insertion_sort_array(suffix_array,s,genome_length); 
+ //suffix_array = insertion_sort_array(suffix_array,s,genome_length); 
+ suffix_array = mergesort_SA(suffix_array,s,genome_length);
  for(i=0;i<genome_length;i++)
  {
   if (suffix_array[i]==0)

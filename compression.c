@@ -1178,7 +1178,7 @@ struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s,u
  unsigned char max_bits = sizeof(unsigned long long int)*8;
 
  unsigned long long int *bitvector = (unsigned long long int*)calloc(string_length/max_bits+1,sizeof(unsigned long long int*));
- //printf("size je %d a pocet slov je %d, bajtov je %d\n",string_length,string_length/max_bits+1,(string_length/max_bits+1)*8);
+ printf("size je %d a pocet slov je %d, bajtov je %d\n",string_length,string_length/max_bits+1,(string_length/max_bits+1)*8);
  
  unsigned int word_index = 0;
  unsigned char bit_index = 0;
@@ -1216,7 +1216,7 @@ struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s,u
  //printf("idem realokovat na %ld\n",(word_index+1)*sizeof(unsigned long long int));
  //fflush(stdout);
  bitvector = realloc(bitvector, (word_index+1)*sizeof(unsigned long long int));
- //printf("pouzilo sa %ld bajtov\n",(word_index+1)*sizeof(unsigned long long int));
+ printf("pouzilo sa %ld bajtov\n",(word_index+1)*sizeof(unsigned long long int));
  struct wavelet_tree* wt_node = (struct wavelet_tree*)malloc(sizeof(struct wavelet_tree));
  wt_node->right_alphabet = right_alphabet;
  wt_node->left_alphabet = left_alphabet;
@@ -1242,7 +1242,7 @@ unsigned int* build_bitcount_table(unsigned long long int *bitvector, unsigned i
  unsigned int count = 0;
  unsigned int number = (bitvector_length-1)/sample_occ_size;
  unsigned int* bitcount_table = (unsigned int*) malloc (sizeof(unsigned int)*number);
- //printf("budujem bitcount table pre %d a alokovane je %d\n",bitvector_length,number);
+ printf("budujem bitcount table pre %d a alokovane je %d\n",bitvector_length,number);
  for (i = 0; i<bitvector_length;i++)
  {
   count = count + __builtin_popcountll(bitvector[i]);

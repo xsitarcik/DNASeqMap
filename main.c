@@ -11,8 +11,8 @@ unsigned int genome_length;
 
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
-unsigned int sample_OCC_size = 10;
-unsigned int sample_SA_size = 8;
+unsigned int sample_OCC_size = 128;
+unsigned int sample_SA_size = 64;
 
 //program parameters
 unsigned char save = 0;
@@ -92,7 +92,9 @@ int main ( int argc, char *argv[] )
   clock_t begin = clock();
   printf("...constructing BWT...\n");
   suffix_array = init_suffix_array(suffix_array,genome, genome_length);
+  
   bwt = create_bwt(suffix_array,genome,genome_length);
+  
   clock_t end = clock();
   double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
   printf("construction of BWT took: %lf seconds\n", time_spent);
@@ -178,11 +180,6 @@ if (save)
 
   //build FM Index with WT for backward search
   FM_index_WT = build_FM_index_WT(suffix_array,sample_SA_size,sample_OCC_size,genome_length,bwt,alphabet);
-
-  for(i=0;i<100;i++){
-  printf("%c", wt_access(i, FM_index_WT->WT_root, sample_OCC_size));  
-  }
-  printf("\n");
  
   printf("--------------------------------------\n");
  
