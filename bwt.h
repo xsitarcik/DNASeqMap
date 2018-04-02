@@ -10,5 +10,6 @@ void topDownMerge(char *s,unsigned int *positions, unsigned int begin, unsigned 
 void topDownSplitMerge (char *s,unsigned int *positions, unsigned int begin, unsigned int end, unsigned int *pomocnePole, unsigned int length);
 void copyArr(unsigned int src[], unsigned int begin, unsigned int end, unsigned int dest[]);
 void mergeSort(char*s,unsigned int *positions,unsigned int size);
-unsigned int porovnaj(char *s,unsigned int pos1, unsigned int pos2,  unsigned int length);
+unsigned int porovnaj(unsigned char *s,unsigned int start1,unsigned int start2,unsigned int genome_length);
 unsigned int * mergesort_SA(unsigned int *suffix_array, char *s, unsigned int length);
+unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, unsigned char*file,unsigned int*genome_length);

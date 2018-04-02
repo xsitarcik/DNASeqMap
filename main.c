@@ -8,21 +8,27 @@
 #include "compression.h"
 
 unsigned int genome_length;
-
+unsigned char max_error = 1;
+unsigned char max_bits = sizeof(unsigned long long int)*8;
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
-unsigned int sample_OCC_size = 128;
-unsigned int sample_SA_size = 64;
+unsigned int sample_OCC_size = 80; //in reality it's *64
+unsigned int sample_SA_size = 32;
 
 //program parameters
 unsigned char save = 0;
-unsigned char *save_name = "bwt.txt";
+unsigned char *save_name = "alt_Celera_chr15_bwt.txt";
 unsigned char load = 1;
-unsigned char *load_name = "bwt.txt";
+unsigned char *load_name = "alt_Celera_chr15_bwt.txt";
 
-unsigned char*filename_text = "test.txt";
-unsigned char*filename_patterns = "patterns.txt";
-unsigned int MAX_READ_LENGTH = 50;
+unsigned char*filename_text = "alt_Celera_chr15.fa";
+unsigned char*filename_patterns = "e_coli_10000snp.fa";
+unsigned int MAX_READ_LENGTH = 60;
+unsigned char *alphabet = "ACGNT";
+unsigned char alphabet_size = 4; //indexing from 0
+
+unsigned char file_with_chunks = 1;
+unsigned int CHUNK_SIZE = 70;
 
 //for compression
 unsigned int block_size = 15000;
@@ -33,11 +39,11 @@ unsigned char flag_huffman = 1;
 unsigned char flag_wavelet_tree = 1;
 
 //for string matching
-unsigned char max_errors=2;
+
 
 int main ( int argc, char *argv[] )
 {
- int i,j,k;
+ int i,j,k,count = 0;
  unsigned int *suffix_array = NULL;
  unsigned int *sample_SA = NULL;
  unsigned char *genome; 
@@ -47,7 +53,7 @@ int main ( int argc, char *argv[] )
  struct FMIndex *FM_index = NULL;
  struct compressedFMIndex *compressed_FM_index = NULL;
  struct FMIndex_WT *FM_index_WT = NULL;
- unsigned char *alphabet = "ACGT";
+
  FILE *fp;
  FILE *fh_patterns;
  char *pattern = (char*)malloc(sizeof(char)*MAX_READ_LENGTH);
@@ -56,7 +62,6 @@ int main ( int argc, char *argv[] )
  {
   printf("%s\n",argv[i]);
  }*/
- 
 
  if (load)
  {
@@ -65,6 +70,7 @@ int main ( int argc, char *argv[] )
    printf("...loading BWT from file %s... \n",load_name);
    genome_length = 0;
    fscanf (fp, "%u\n", &genome_length); 
+   printf("genome length : %d\n",genome_length);
    bwt = (unsigned char*)malloc(sizeof(unsigned char)*genome_length+1);
    fread (bwt, 1, genome_length, fp);
    bwt[genome_length]='\0';
@@ -79,7 +85,14 @@ int main ( int argc, char *argv[] )
  else 
  {
   //load main string from file
-  genome = load_genome_from_file(filename_text,&genome_length);
+  if (file_with_chunks){
+   genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
+   printf("loading by chunks\n");
+  }
+  else{
+   genome = load_genome_from_file(filename_text,&genome_length);
+   printf("normal loading\n");
+  }
   if (genome_length<=1)
   {
    printf("Error when reading file: %s\n",filename_text);
@@ -88,13 +101,15 @@ int main ( int argc, char *argv[] )
   else
   printf("Size of read genome is %d characters\n",genome_length);
 
+  //printf("read%s\n",genome);
   //create suffix array and bwt of main input string
   clock_t begin = clock();
   printf("...constructing BWT...\n");
-  suffix_array = init_suffix_array(suffix_array,genome, genome_length);
+  suffix_array = init_suffix_array(suffix_array,genome,genome_length);
   
   bwt = create_bwt(suffix_array,genome,genome_length);
-  
+  //printf("%s\n",bwt);
+
   clock_t end = clock();
   double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
   printf("construction of BWT took: %lf seconds\n", time_spent);
@@ -142,10 +157,10 @@ if (save)
  //build FMIndex and free suffix_array AND GENOME (to do)
  if (flag_compress)
  {
-  compressed_FM_index = build_compressed_FM_index(suffix_array,sample_SA_size, sample_OCC_size, genome_length,bwt,alphabet,flag_mtf, flag_runs, flag_huffman, block_size);
+  compressed_FM_index = build_compressed_FM_index(suffix_array,bwt,flag_mtf, flag_runs, flag_huffman, block_size);
    printf("ide sa na vypocet\n");
    fflush(stdout);
-  int*result = approximate_search_in_compressed_FM_index(max_errors,compressed_FM_index,"TAATCGGTGGGAGTATTCAACGTGATGAAGAC",flag_mtf,flag_runs,flag_huffman);
+  int*result = approximate_search_in_compressed_FM_index(compressed_FM_index,"TAATCGGTGGGAGTATTCAACGTGATGAAGAC",flag_mtf,flag_runs,flag_huffman);
   printf("results: %d %d\n",result[0],result[1]);
   printf("ide sa na vypocet\n");
   fflush(stdout);
@@ -179,21 +194,34 @@ if (save)
  else if (flag_wavelet_tree){
 
   //build FM Index with WT for backward search
-  FM_index_WT = build_FM_index_WT(suffix_array,sample_SA_size,sample_OCC_size,genome_length,bwt,alphabet);
+  FM_index_WT = build_FM_index_WT(suffix_array,bwt);
  
   printf("--------------------------------------\n");
- 
+  
+  unsigned int*result = (unsigned int*)malloc(2*sizeof(unsigned int));
   printf("...approximate searching...\n");
+  k = 0;
   clock_t begin1 = clock();
   while (fgets(pattern, MAX_READ_LENGTH, fh_patterns) != NULL) {
+    fgets(pattern, MAX_READ_LENGTH, fh_patterns); //in case 
     pattern[strlen(pattern)-1]='\0';
-    printf("--%s--\n", pattern);
-    approximate_search_in_FM_index_WT(max_errors,FM_index_WT,pattern);
+    /*printf("--%s--\n", pattern);
+    fflush(stdout);*/
+    k++;
+    i = 0; j = 0;
+    while (i!=strlen(pattern))
+      if (pattern[i++]=='N')
+        j++;
+    if (j<=max_error)
+     count += approximate_search_in_FM_index_WT(FM_index_WT,pattern,result);
+    //else
+      //printf("too much Ns\n");
   }
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
-
+  printf("Total aligned reads: %d\n",count);
+  printf("Total reads: %d\n",k);
   //long long int result = approximate_search_in_FM_index_WT(max_errors,FM_index_WT,"TCGATTATATCACTTAATGACTTTTGGGTCAGGGTGTGTTACCTTACAGGAATTGAGACCGTCCATTAATTTCTCTTGCATTTAT");
   //printf("result je %lld\n",result);
   //build FM Index with WT for forward search
@@ -214,10 +242,10 @@ if (save)
  }
  else
  {
-  FM_index = build_FM_index(suffix_array,sample_SA_size, sample_OCC_size, genome_length,bwt,alphabet);
+  FM_index = build_FM_index(suffix_array,bwt);
   
   print_info_fm_index(FM_index);
-  int*result = approximate_search(max_errors,FM_index,"TYYASI");
+  int*result = approximate_search(FM_index,"TYYASI");
   printf("results: %d %d\n",result[0],result[1]);
   while (result[0]<result[1])
   {

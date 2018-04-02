@@ -716,9 +716,8 @@ void alphabet_encode (char *s, char * alphabet,unsigned int block_size)
 
 unsigned char get_set_bits(unsigned char bits)
 {
- int i;
  int ret = 1;
- for (i=0;i<bits;i++)
+ for (unsigned int i=0;i<bits;i++)
   ret = ret * 2;
  return (ret - 1);
 }
@@ -1156,19 +1155,19 @@ void free_huffman_tree(struct huffman_node *node)
  }
 }
 
-struct wavelet_tree *build_huffman_shaped_WT(unsigned char *s, unsigned char *alphabet, unsigned int *frequencies,unsigned int string_length,unsigned int sample_occ_size)
+struct wavelet_tree *build_huffman_shaped_WT(unsigned char *s, unsigned int *frequencies)
 {
  //build huffman tree of alphabet
  struct huffman_node*root = build_huffman_tree(alphabet,frequencies,strlen(alphabet));
 
  //build wavelet tree recursively from root
- struct wavelet_tree *wt_root = build_WT_node(root,s,string_length,sample_occ_size);
+ struct wavelet_tree *wt_root = build_WT_node(root,s);
  
  return wt_root;
 }
 
 //build wavelet tree node and its children
-struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s,unsigned int string_length,unsigned int sample_occ_size)
+struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s)
 {
  if (root->left == NULL && root->right==NULL)
     return NULL;
@@ -1177,17 +1176,16 @@ struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s,u
  unsigned char * right_alphabet = get_alphabet(root->right);
  unsigned char max_bits = sizeof(unsigned long long int)*8;
 
- unsigned long long int *bitvector = (unsigned long long int*)calloc(string_length/max_bits+1,sizeof(unsigned long long int*));
- printf("size je %d a pocet slov je %d, bajtov je %d\n",string_length,string_length/max_bits+1,(string_length/max_bits+1)*8);
+ unsigned long long int *bitvector = (unsigned long long int*)calloc(genome_length/max_bits+1,sizeof(unsigned long long int*));
+ //printf("size je %d a pocet slov je %d, bajtov je %d\n",string_length,string_length/max_bits+1,(string_length/max_bits+1)*8);
  
  unsigned int word_index = 0;
  unsigned char bit_index = 0;
  unsigned int i;
- 
- printf("velkost s:%d\n",string_length);
- printf("kodujem pravo:%s\n",right_alphabet);
- printf("kddujem vlavo:%s\n",left_alphabet);
- for (i=0;i<string_length;i++)
+
+ printf("coding as 1: %s, ",right_alphabet);
+ printf("coding as 0: %s, ",left_alphabet);
+ for (i=0;i<genome_length;i++)
  {
   if (in_alphabet(s[i],right_alphabet))
   {
@@ -1216,37 +1214,37 @@ struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s,u
  //printf("idem realokovat na %ld\n",(word_index+1)*sizeof(unsigned long long int));
  //fflush(stdout);
  bitvector = realloc(bitvector, (word_index+1)*sizeof(unsigned long long int));
- printf("pouzilo sa %ld bajtov\n",(word_index+1)*sizeof(unsigned long long int));
+ printf(" - used %ld bytes\n",(word_index+1)*sizeof(unsigned long long int));
  struct wavelet_tree* wt_node = (struct wavelet_tree*)malloc(sizeof(struct wavelet_tree));
  wt_node->right_alphabet = right_alphabet;
  wt_node->left_alphabet = left_alphabet;
  wt_node->bitvector = bitvector;
  if (root->left!=NULL)
-  wt_node->left = build_WT_node(root->left,s,string_length,sample_occ_size);
+  wt_node->left = build_WT_node(root->left,s);
  else
   wt_node->left = NULL;
  if (root->right!=NULL)
-  wt_node->right = build_WT_node(root->right,s,string_length,sample_occ_size);
+  wt_node->right = build_WT_node(root->right,s);
  else
   wt_node->right = NULL;
 
-wt_node->bitcount_table = build_bitcount_table(wt_node->bitvector,word_index+1,sample_occ_size);
+wt_node->bitcount_table = build_bitcount_table(wt_node->bitvector,word_index+1);
 return wt_node;
 }
 
 //build table of counters of bits in bitvectors of wavelet tree
-unsigned int* build_bitcount_table(unsigned long long int *bitvector, unsigned int bitvector_length, unsigned int sample_occ_size)
+unsigned int* build_bitcount_table(unsigned long long int *bitvector, unsigned int bitvector_length)
 {
  unsigned int i;
  unsigned int j=0;
  unsigned int count = 0;
- unsigned int number = (bitvector_length-1)/sample_occ_size;
+ unsigned int number = 1+(bitvector_length-1)/sample_OCC_size;
  unsigned int* bitcount_table = (unsigned int*) malloc (sizeof(unsigned int)*number);
- printf("budujem bitcount table pre %d a alokovane je %d\n",bitvector_length,number);
+ printf("building bitcount table on %d words(64bits) - used %d bytes\n",bitvector_length,number*sizeof(unsigned int));
  for (i = 0; i<bitvector_length;i++)
  {
   count = count + __builtin_popcountll(bitvector[i]);
-  if ((i%sample_occ_size)==(sample_occ_size-1))
+  if ((i%sample_OCC_size)==(sample_OCC_size-1))
   {
    fflush(stdout);
    bitcount_table[j++] = count;
@@ -1301,13 +1299,12 @@ unsigned char in_alphabet(unsigned char c, unsigned char *alphabet)
 }
 
 //function which returns character on input position
-unsigned char wt_access(unsigned int position, struct wavelet_tree *root, unsigned int sample_occ_size)
+unsigned char wt_access(unsigned int position, struct wavelet_tree *root)
 {
- struct wavelet_tree* current = root;
- unsigned int word_index = position/(sizeof(unsigned long long int)*8);
- unsigned int bit_index = position-word_index*sizeof(unsigned long long int)*8;
+ unsigned int word_index = position/max_bits;
+ unsigned int bit_index = position-word_index*max_bits;
 //if bit of input position is 1
- if (get_bit(current->bitvector[word_index],bit_index))
+ if (get_bit(root->bitvector[word_index],bit_index))
  {
   //printf("pristupujem R pos %d, %d %d %llu, %d \n",position,word_index,bit_index,current->bitvector[word_index],get_bit(current->bitvector[word_index],bit_index));
   //check if current node is leaf, therefore coded alphabet is only one character
@@ -1316,7 +1313,7 @@ unsigned char wt_access(unsigned int position, struct wavelet_tree *root, unsign
     return root->right_alphabet[0];
   }
   //if not in leaf, check right child, because bit = 1, and new position is count of 1
-  return wt_access(count_set_bits(current->bitvector,position,sample_occ_size,current->bitcount_table)-1,current->right,sample_occ_size);
+  return wt_access(count_set_bits(root->bitvector,position,root->bitcount_table)-1,root->right);
  }
  //vpravo CG C-10 G-11
  //vlaov A   A-00 T-01
@@ -1332,72 +1329,71 @@ unsigned char wt_access(unsigned int position, struct wavelet_tree *root, unsign
    return root->left_alphabet[0];
   }
   //if not in leaf, check left child, because bit = 1, and new position is count of 0
-  return wt_access(count_unset_bits(current->bitvector,position,sample_occ_size,current->bitcount_table)-1,current->left,sample_occ_size);
+  return wt_access(count_unset_bits(root->bitvector,position,root->bitcount_table)-1,root->left);
  }
 }
 
 //function which counts 1 in bitvector up to input position while using auxiliary srtuctrre of bitcount table
-unsigned int count_set_bits(unsigned long long int*bitvector, unsigned int position, unsigned int sample_occ_size, unsigned int* bitcount_table)
+unsigned int count_set_bits(unsigned long long int*bitvector, unsigned int position, unsigned int* bitcount_table)
 {
  unsigned long long int remainder;
  unsigned int count = 0;
  unsigned int i = 0;
- unsigned char maxbits = sizeof(unsigned long long int)*8;
 
  //get index of nearest stored counter of ones in bitvector
- int index = position/(sample_occ_size*maxbits)-1;
-//printf("YOLO %d %d\n",position,index);
- fflush(stdout);
+ int index = position/(sample_OCC_size*max_bits)-1;
+ //printf("index je %d\n",index);
+
  if (index>=0)
  {
   count = bitcount_table[index];
-  i = (index+1)*sample_occ_size;
-  position = position - i*maxbits;
+  i = (index+1)*sample_OCC_size;
+  position -= i*max_bits;
  }
 
- //printf("YOLO\n");
- fflush(stdout);
  //count 1 in remaining part of bitvector
- while (position>=maxbits)
+ while (position>=max_bits)
  {
-  count = count + __builtin_popcountll(bitvector[i++]);
-  position = position - maxbits;
+  count += __builtin_popcountll(bitvector[i++]);
+  position = position - max_bits;
  }
  //printf("bitvector je %llu\n",bitvector[i]);
- remainder = bitvector[i] >> (maxbits - position - 1);
+ //fflush(stdout);
+ remainder = bitvector[i] >> (max_bits - position - 1);
  //printf("count je %d\n",count);
- count = count + __builtin_popcountll(remainder);
+ //fflush(stdout);
+ count+= __builtin_popcountll(remainder);
  //printf("count je %d\n",count);
 return count;
 }
 
-unsigned int count_unset_bits(unsigned long long int*bitvector, unsigned int position, unsigned int sample_occ_size, unsigned int* bitcount_table)
+unsigned int count_unset_bits(unsigned long long int*bitvector, unsigned int position, unsigned int* bitcount_table)
 {
  unsigned long long int remainder;
  unsigned int count = 0;
  unsigned int i = 0;
- unsigned char maxbits = sizeof(unsigned long long int)*8;
- //printf("UNS position je %d,maxbits je %d, sample_occ_size je %d\n",position,maxbits,sample_occ_size);
- int index = position/(sample_occ_size*maxbits)-1;
+
+ //printf("UNS position je %d,max_bits je %d, sample_occ_size je %d\n",position,max_bits,sample_occ_size);
+ int index = position/(sample_OCC_size*max_bits)-1;
  //printf("index je %d, i je %d occ je %d\n",index,i,bitcount_table[index]);
  if (index>=0)
  {
-  i = (index+1)*sample_occ_size;
-  count = i*maxbits - bitcount_table[index];
-  position = position - i*maxbits;
+  i = (index+1)*sample_OCC_size;
+  count = i*max_bits - bitcount_table[index];
+  position = position - i*max_bits;
  }
 
  //printf("index je %d, i je %d tvysnok je %d\n",index,i,position);
  
- while (position>=maxbits)
+ while (position>=max_bits)
   {
-   count = count + maxbits - __builtin_popcountll(bitvector[i++]);
-   position = position - maxbits;
+   count = count + max_bits - __builtin_popcountll(bitvector[i++]);
+   position = position - max_bits;
   }
   //printf("bitvector je %llu\n",bitvector[i]);
-  remainder = bitvector[i] >> (maxbits-position - 1);
+  remainder = bitvector[i] >> (max_bits-position - 1);
   //printf("count je %d\n",count);
-  count = count + position + 1 - __builtin_popcountll(remainder);
+  count += position + 1 - __builtin_popcountll(remainder);
   //printf("count je %d\n",count);
  return count;
 }
@@ -1408,34 +1404,30 @@ unsigned long long int get_bit(unsigned long long int var, unsigned int position
   return (var >> (63-position)) & 1;
 }
 
-unsigned int wt_rank(unsigned char c, unsigned int position, struct wavelet_tree *root, unsigned int sample_occ_size)
+unsigned int wt_rank(unsigned char c, unsigned int position, struct wavelet_tree *root)
 {
- struct wavelet_tree* current = root;
  unsigned int count = 0;
- if (current == NULL)
+ if (root == NULL)
  {
   return position;
  }
 
  if (position)
-    position--;
+    --position;
 else return 0;
  //printf("WTF %c, position je %d\n",c,position);
-
+//fflush(stdout);
  //ak sa znak nachadza v lavej abecede spocitaju sa nuly inac 1
- if (in_alphabet(c,current->left_alphabet))
+ if (in_alphabet(c,root->left_alphabet))
  {
   //printf("pocitam 0 %c do pozicie %d\n",c,position);
-  count = count_unset_bits(current->bitvector,position,sample_occ_size,current->bitcount_table);
+  count = count_unset_bits(root->bitvector,position,root->bitcount_table);
+  return wt_rank(c,count,root->left);
  }
  else
  {
   //printf("pocitam 1 %c do pozicie %d\n",c,position);
-  count = count_set_bits(current->bitvector,position,sample_occ_size,current->bitcount_table);
+  count = count_set_bits(root->bitvector,position,root->bitcount_table);
+  return wt_rank(c,count,root->right);
  }
-
- if (in_alphabet(c,current->left_alphabet))
-    return wt_rank(c,count,current->left,sample_occ_size);
- else
-    return wt_rank(c,count,current->right,sample_occ_size);
 }
