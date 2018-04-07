@@ -45,6 +45,10 @@ unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, unsigne
  
   s = (unsigned char*) realloc(s,(sum+1)*sizeof(unsigned char));
   s[sum] = '\0';
+  for (unsigned int i = 0; i<sum;i++){
+    if (s[i] == 'N')
+      s[i] = 'T';
+  }
   *genome_length = sum;  //ulozenie poctu znakov velmi dlheho retazca
   return s;
 }

@@ -1387,7 +1387,7 @@ unsigned int count_unset_bits(unsigned long long int*bitvector, unsigned int pos
  
  while (position>=max_bits)
   {
-   count = count + max_bits - __builtin_popcountll(bitvector[i++]);
+   count += __builtin_popcountll(~bitvector[i++]);
    position = position - max_bits;
   }
   //printf("bitvector je %llu\n",bitvector[i]);

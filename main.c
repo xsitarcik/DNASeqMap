@@ -7,25 +7,31 @@
 #include <stdint.h>
 #include "compression.h"
 
-unsigned int genome_length;
-unsigned char max_error = 1;
-unsigned char max_bits = sizeof(unsigned long long int)*8;
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
-unsigned int sample_OCC_size = 80; //in reality it's *64
+unsigned int sample_OCC_size = 3; //in reality it's *64
 unsigned int sample_SA_size = 32;
+unsigned char max_error = 1;
+int MAX_RESULTS = 200;
+int MIN_RESULT_LENGTH = 25; //pattern length /(maxerrror+1) / 2;
 
 //program parameters
 unsigned char save = 0;
-unsigned char *save_name = "alt_Celera_chr15_bwt.txt";
+unsigned char *save_name = "alt_Celera_chr15_bwt_withoutN.txt";
 unsigned char load = 1;
-unsigned char *load_name = "alt_Celera_chr15_bwt.txt";
-
+unsigned char *load_name = "alt_Celera_chr15_bwt_withoutN.txt";
+//unsigned char *load_name = "patdesiattisic_bwt2.txt";
 unsigned char*filename_text = "alt_Celera_chr15.fa";
-unsigned char*filename_patterns = "e_coli_10000snp.fa";
-unsigned int MAX_READ_LENGTH = 60;
-unsigned char *alphabet = "ACGNT";
-unsigned char alphabet_size = 4; //indexing from 0
+
+//unsigned char*filename_patterns = "results_bowtie_error1.txt";
+unsigned char*filename_patterns = "SRR493095.fasta";
+//unsigned char*filename_patterns = "e_coli_10000snp.fa";
+//unsigned char*filename_patterns = "meko.fa";
+unsigned int MAX_READ_LENGTH = 200;
+unsigned int READS_CHUNK = 70;
+
+unsigned char *alphabet = "ACGT";
+unsigned char alphabet_size = 3; //indexing from 0 so -1
 
 unsigned char file_with_chunks = 1;
 unsigned int CHUNK_SIZE = 70;
@@ -38,7 +44,10 @@ unsigned char flag_mtf = 1;
 unsigned char flag_huffman = 1;
 unsigned char flag_wavelet_tree = 1;
 
-//for string matching
+//global program parametrrs
+unsigned int genome_length;
+ struct FMIndex_WT *FM_index_WT;
+unsigned char max_bits = sizeof(unsigned long long int)*8;
 
 
 int main ( int argc, char *argv[] )
@@ -52,7 +61,7 @@ int main ( int argc, char *argv[] )
  unsigned int *bitvector_length;
  struct FMIndex *FM_index = NULL;
  struct compressedFMIndex *compressed_FM_index = NULL;
- struct FMIndex_WT *FM_index_WT = NULL;
+ unsigned int result_map;
 
  FILE *fp;
  FILE *fh_patterns;
@@ -197,26 +206,44 @@ if (save)
   FM_index_WT = build_FM_index_WT(suffix_array,bwt);
  
   printf("--------------------------------------\n");
-  
-  unsigned int*result = (unsigned int*)malloc(2*sizeof(unsigned int));
+  char c;
+  unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
+  unsigned int *half_result = (unsigned int*) malloc (sizeof(unsigned int)*2);
+  unsigned int *perfect_results = (unsigned int *)malloc(sizeof(unsigned int)*(max_error+1)*8);
+  if (perfect_results==NULL || result == NULL || half_result == NULL)
+  {
+   printf("error pri alokacii\n");
+   exit(-1);
+  }
+
   printf("...approximate searching...\n");
   k = 0;
+  count = 0;
+
   clock_t begin1 = clock();
-  while (fgets(pattern, MAX_READ_LENGTH, fh_patterns) != NULL) {
-    fgets(pattern, MAX_READ_LENGTH, fh_patterns); //in case 
-    pattern[strlen(pattern)-1]='\0';
-    /*printf("--%s--\n", pattern);
-    fflush(stdout);*/
-    k++;
-    i = 0; j = 0;
-    while (i!=strlen(pattern))
-      if (pattern[i++]=='N')
-        j++;
-    if (j<=max_error)
-     count += approximate_search_in_FM_index_WT(FM_index_WT,pattern,result);
-    //else
-      //printf("too much Ns\n");
+  //get name of the read
+  while (fgets(pattern, MAX_READ_LENGTH, fh_patterns) != NULL) 
+  { 
+   for (i=0;i<3;i++)
+   {
+    fgets(&pattern[i*READS_CHUNK], READS_CHUNK+2, fh_patterns );
+   }
+
+   pattern[strlen(pattern)-1]='\0';
+   ++k;
+
+   if (strchr(pattern,'N')==NULL)
+   {
+    result_map = approximate_search_in_FM_index_WT(pattern,result,half_result,perfect_results);
+    if (result_map)
+    {
+     ++count;
+     /*printf("-%s-\n",pattern);
+     printf("approximate position is %d\n",result_map);*/
+    }
+   }
   }
+
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
@@ -239,6 +266,14 @@ if (save)
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("%d access operacie %lf", i, time_spent1);
   */
+   
+ free(perfect_results);
+ printf("freed PR\n");fflush(stdout);
+
+  free(FM_index_WT->sampleSA);
+  free(FM_index_WT->count_table);
+  free(FM_index_WT->WT_root);
+  free(FM_index_WT);
  }
  else
  {
