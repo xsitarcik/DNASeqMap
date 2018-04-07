@@ -1,4 +1,4 @@
-extern unsigned char *alphabet;
+extern char *alphabet;
 extern unsigned char alphabet_size;
 extern unsigned char max_error;
 extern unsigned int sample_OCC_size; //in reality it's *64
@@ -8,6 +8,8 @@ extern unsigned char max_bits;
 extern int MAX_RESULTS;
 extern int MIN_RESULT_LENGTH;
 extern struct FMIndex_WT *FM_index_WT;
+extern unsigned char*genome;
+extern struct wavelet_tree *WT_root;
 
 struct FMIndex
 {
@@ -24,9 +26,8 @@ struct FMIndex
 struct FMIndex_WT
 {
 unsigned int end;
-unsigned int *sampleSA;
 unsigned int *count_table;
-struct wavelet_tree *WT_root;
+unsigned int *sampleSA;
 };
 
 struct compressedFMIndex
@@ -56,7 +57,7 @@ unsigned int get_SA_value_compressed(unsigned int bwt_position, unsigned int len
 unsigned int **create_occurence_table(unsigned char *s, unsigned char *alphabet);
 unsigned int count_occ(unsigned char *s, unsigned int **occurence_table, unsigned int position, unsigned char c, unsigned char character);
 unsigned int last_to_first(unsigned char c, unsigned int bwt_position, unsigned char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table);
-unsigned int get_alphabet_index(unsigned char *alphabet, unsigned char c);
+unsigned char get_alphabet_index(char *alphabet, unsigned char c);
 unsigned char *reverseBWT(unsigned int end, unsigned char*alphabet,unsigned int*count_table,unsigned char*bwt, unsigned int**occurence_table,unsigned char alphabetically_encoded);
 void print_occurence_table(struct FMIndex *fm_index);
 void print_sample_SA(struct FMIndex *fm_index);
@@ -77,8 +78,9 @@ unsigned int count_occ_in_block(struct compressed_block *block, unsigned int pos
 unsigned int count_occ_in_compressed_FMIndex(struct compressed_block *block, unsigned int block_size, unsigned int position, unsigned char c, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned char*alphabet);
 unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, unsigned char*bwt,unsigned int block_size, unsigned int position, unsigned char c, unsigned char*alphabet);
 unsigned int*search_pattern_in_compressed_FM_index(struct compressedFMIndex *compressed_fm_index, char *pattern,unsigned char flag_mtf,unsigned char flag_runs, unsigned char flag_huffman);
-unsigned char search_pattern_in_FM_index_WT(char *pattern, unsigned char current_pattern_length, unsigned int *half_result,unsigned int *half_result_length,unsigned int*result);
-long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned int*result, unsigned int*half_result,unsigned int*perfect_results);
+unsigned char search_pattern_in_FM_index_WT(char *pattern, unsigned char current_pattern_length, unsigned int*result);
+long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned int*result);
 unsigned int get_SA_value_WT(unsigned int bwt_position);
 unsigned int last_to_first_WT(unsigned char c, unsigned int bwt_position, struct wavelet_tree *wtree_root,unsigned int *count_table);
 void threshold_search_pattern_in_FM_index_WT(char *pattern, unsigned int *result_length, unsigned int *result,unsigned int pattern_length);
+unsigned int extend_seed_in_FM_index_WT(unsigned char*pattern, unsigned int last, unsigned int*result);

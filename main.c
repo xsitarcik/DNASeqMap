@@ -13,24 +13,25 @@ unsigned int sample_OCC_size = 3; //in reality it's *64
 unsigned int sample_SA_size = 32;
 unsigned char max_error = 1;
 int MAX_RESULTS = 200;
-int MIN_RESULT_LENGTH = 25; //pattern length /(maxerrror+1) / 2;
+int MIN_RESULT_LENGTH = 50; //pattern length /(maxerrror+1) / 2;
 
 //program parameters
 unsigned char save = 0;
 unsigned char *save_name = "alt_Celera_chr15_bwt_withoutN.txt";
+
 unsigned char load = 1;
 unsigned char *load_name = "alt_Celera_chr15_bwt_withoutN.txt";
 //unsigned char *load_name = "patdesiattisic_bwt2.txt";
+
 unsigned char*filename_text = "alt_Celera_chr15.fa";
+//unsigned char*filename_text = "patdesiattisic.txt";
 
 //unsigned char*filename_patterns = "results_bowtie_error1.txt";
 unsigned char*filename_patterns = "SRR493095.fasta";
-//unsigned char*filename_patterns = "e_coli_10000snp.fa";
-//unsigned char*filename_patterns = "meko.fa";
 unsigned int MAX_READ_LENGTH = 200;
 unsigned int READS_CHUNK = 70;
 
-unsigned char *alphabet = "ACGT";
+char *alphabet = "ACGT";
 unsigned char alphabet_size = 3; //indexing from 0 so -1
 
 unsigned char file_with_chunks = 1;
@@ -47,15 +48,15 @@ unsigned char flag_wavelet_tree = 1;
 //global program parametrrs
 unsigned int genome_length;
  struct FMIndex_WT *FM_index_WT;
+ struct wavelet_tree *WT_root;
 unsigned char max_bits = sizeof(unsigned long long int)*8;
-
+unsigned char*genome;
 
 int main ( int argc, char *argv[] )
 {
  int i,j,k,count = 0;
  unsigned int *suffix_array = NULL;
  unsigned int *sample_SA = NULL;
- unsigned char *genome; 
  unsigned char *bwt = NULL;
  unsigned char c;
  unsigned int *bitvector_length;
@@ -72,6 +73,8 @@ int main ( int argc, char *argv[] )
   printf("%s\n",argv[i]);
  }*/
 
+ genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
+ printf("loaded genome\n");
  if (load)
  {
   fp = fopen(load_name,"r");
@@ -122,7 +125,7 @@ int main ( int argc, char *argv[] )
   clock_t end = clock();
   double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
   printf("construction of BWT took: %lf seconds\n", time_spent);
-  free(genome); 
+  //free(genome); 
   fflush(stdout);
  }
  
@@ -209,8 +212,7 @@ if (save)
   char c;
   unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
   unsigned int *half_result = (unsigned int*) malloc (sizeof(unsigned int)*2);
-  unsigned int *perfect_results = (unsigned int *)malloc(sizeof(unsigned int)*(max_error+1)*8);
-  if (perfect_results==NULL || result == NULL || half_result == NULL)
+  if (result == NULL || half_result == NULL)
   {
    printf("error pri alokacii\n");
    exit(-1);
@@ -229,17 +231,17 @@ if (save)
     fgets(&pattern[i*READS_CHUNK], READS_CHUNK+2, fh_patterns );
    }
 
+   //printf("k%d-%s-\n",k,pattern);
    pattern[strlen(pattern)-1]='\0';
-   ++k;
-
+   k++;
    if (strchr(pattern,'N')==NULL)
    {
-    result_map = approximate_search_in_FM_index_WT(pattern,result,half_result,perfect_results);
+    result_map = approximate_search_in_FM_index_WT(pattern,result);
     if (result_map)
     {
      ++count;
-     /*printf("-%s-\n",pattern);
-     printf("approximate position is %d\n",result_map);*/
+     printf("-%s-\n",pattern);
+     printf("approximate position is %d\n",result_map);
     }
    }
   }
@@ -266,13 +268,11 @@ if (save)
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("%d access operacie %lf", i, time_spent1);
   */
-   
- free(perfect_results);
- printf("freed PR\n");fflush(stdout);
+  
 
   free(FM_index_WT->sampleSA);
   free(FM_index_WT->count_table);
-  free(FM_index_WT->WT_root);
+  free(WT_root);
   free(FM_index_WT);
  }
  else

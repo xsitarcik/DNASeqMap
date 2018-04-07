@@ -1,4 +1,4 @@
-extern unsigned char *alphabet;
+extern char *alphabet;
 extern unsigned char alphabet_size;
 extern unsigned char max_error;
 extern unsigned int sample_OCC_size; //in reality it's *64
