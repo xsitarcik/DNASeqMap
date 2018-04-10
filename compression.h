@@ -47,6 +47,7 @@ struct wavelet_tree
 struct wavelet_tree *build_huffman_shaped_WT(unsigned char *s, unsigned int *frequencies);
 struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s);
 unsigned long long int get_bit(unsigned long long int var, unsigned int position);
+unsigned int get_bit_4byte(unsigned int var, unsigned int position);
 unsigned char *get_alphabet(struct huffman_node*node);
 unsigned char in_alphabet(unsigned char c, unsigned char *alphabet);
 unsigned int wt_rank(unsigned char c, unsigned int position, struct wavelet_tree *root);

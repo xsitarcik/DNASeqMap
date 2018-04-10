@@ -14,13 +14,19 @@ struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *b
  struct FMIndex_WT *FM_index_WT = (struct FMIndex_WT*) malloc(sizeof(struct FMIndex_WT));
  printf("...constructing huffman shaped wavelet tree... \n");
  //create count table and also create frequency table for huffman tree
- FM_index_WT->count_table = create_count_table(bwt);
+ count_table = create_count_table(bwt);
+ 
  unsigned int*frequencies = (unsigned int*)malloc(sizeof(unsigned int)*strlen(alphabet));
  clock_t begin = clock();
- for (i=0;i<strlen(alphabet)-1;i++)
+ 
+ /*for (i=0;i<strlen(alphabet)-1;i++)
   frequencies[i] = FM_index_WT->count_table[i+1] - FM_index_WT->count_table[i];
- frequencies[i] = genome_length - FM_index_WT->count_table[i];
+ frequencies[i] = genome_length - FM_index_WT->count_table[i];*/
 
+ for (i=0;i<strlen(alphabet);i++)
+ {
+  frequencies[i] = 1;
+ }
  //store bwt in Huffman-shaped wavelet tree
  WT_root = build_huffman_shaped_WT(bwt,frequencies);
   clock_t end = clock();
@@ -191,12 +197,13 @@ unsigned int get_SA_value_WT(unsigned int bwt_position)
 {
  unsigned int count = 0;
  unsigned char c = wt_access(bwt_position, WT_root);
+ //printf("---------------%d---------------\n",bwt_position);
  while(bwt_position%sample_SA_size!=0)
  {
   //printf("******%d %c %d\n",bwt_position,c,count);
   c = wt_access(bwt_position, WT_root);
   //printf("**** access pozicie %d je %c\n",bwt_position,c);
-  bwt_position = last_to_first_WT(c,bwt_position,WT_root,FM_index_WT->count_table);
+  bwt_position = last_to_first_WT(c,bwt_position,WT_root,count_table);
   count++;
  }
  //printf("---pos %d RESULT: %d %d \n",bwt_position,fm_index_wt->sampleSA[bwt_position/FM_index_WT->sample_SA_size],count);
@@ -234,7 +241,9 @@ unsigned int last_to_first_encoded(unsigned char c, unsigned int bwt_position, u
 unsigned int last_to_first_WT(unsigned char c, unsigned int bwt_position, struct wavelet_tree *wtree_root,unsigned int *count_table)
 {
   unsigned int character = get_alphabet_index(alphabet,c);
+  //printf("pustam wt_rank %c %d\n",c,bwt_position);
  unsigned int last = count_table[character] + wt_rank(c, bwt_position, wtree_root);
+ //printf("vraciam %d+%d=%d\n",count_table[character],wt_rank(c, bwt_position, wtree_root),last);
  //printf("LF %c %d %d %d %d\n",c,character,count_table[character], wt_rank(c, bwt_position, wtree_root),last);
  return last;
 }
@@ -629,7 +638,6 @@ unsigned int*search_pattern_in_compressed_FM_index(struct compressedFMIndex *com
 //procedure for searching pattern in compressed BWT of FM Index
 unsigned char search_pattern_in_FM_index_WT(char *pattern, unsigned char current_pattern_length, unsigned int*result)
 {
- unsigned int *count_table = FM_index_WT->count_table;
  int j = current_pattern_length - 1;
  int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
  unsigned int start,end;
@@ -659,14 +667,15 @@ unsigned char search_pattern_in_FM_index_WT(char *pattern, unsigned char current
   return j;
  }
  
+  //printf("**%d**rozsah je %d az %d \n",j,result[0],result[1]);
  return j;
 }
+
 
 //procedure for searching pattern in compressed BWT of FM Index
 void threshold_search_pattern_in_FM_index_WT(char *pattern, unsigned int *result_length, unsigned int *result, unsigned int pattern_length)
 {
  unsigned int start, end;
- unsigned int *count_table = FM_index_WT->count_table;
  int j = pattern_length - 1;
  int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
 
@@ -698,8 +707,6 @@ unsigned int extend_seed_in_FM_index_WT(unsigned char*pattern, unsigned int last
  int j = last;
  int alphabet_index;
  unsigned int start,end;
- unsigned int *count_table = FM_index_WT->count_table;
-
  /*printf("skoncil som na  = %d, znak %c\n",j, pattern[j]);
  printf("\n****rozsah je %d az %d \n",result[0],result[1]);*/
  while (j>0)
@@ -790,7 +797,7 @@ return result;
 long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned int*result)
 {
  unsigned int pattern_length = strlen(pattern);
- unsigned int k,temp;
+ unsigned int k,temp, length;
  unsigned char pattern_half[pattern_length+2];
  int i;
  unsigned int result_length;
@@ -846,18 +853,20 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
      {
       memcpy(genome_test, &genome[temp-2], result_length+3-k+1);
       genome_test[result_length+3-k+1] = '\0';
-      /*printf("1idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
-      fflush(stdout);*/
+      printf("1idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
+      fflush(stdout);
      }
      else 
      {
       memcpy(genome_test, &genome[temp-2], result_length+3);
       genome_test[result_length+3] = '\0';
-      /*printf("2idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
-      fflush(stdout);*/
+      printf("2idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
+      fflush(stdout);
      }
      if (align(pattern_test,genome_test))
       return temp-2;
+    else 
+      result[0]++;
     }
    }
   }
@@ -882,14 +891,72 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
    fflush(stdout);*/
    memcpy(pattern_half, pattern, current_pattern_length);
    pattern_half[current_pattern_length] = '\0';
-   //printf("going to search firs tpart up to %d, totally %d\n",current_pattern_length, current_pattern_length);
    result_length = search_pattern_in_FM_index_WT(pattern_half, current_pattern_length, result);
    if (!(result_length))
    {
-     //printf("dosiel som az na %d, je potrebne overit\n",result_length);
-     temp = get_SA_value_WT(result[0]);
-     unsigned char pattern_test[pattern_length+1];
-     memcpy(pattern_test, pattern, result_length+3);
+    temp = get_SA_value_WT(result[0]) + current_pattern_length;
+    length = pattern_length - current_pattern_length + 1; //zvysok
+    unsigned char pattern_test[pattern_length];
+    memcpy(pattern_test, &pattern[current_pattern_length-1], length);
+    pattern_test[length] = '\0';
+
+    unsigned char genome_test[pattern_length];
+
+    memcpy(genome_test, &genome[temp-1], length);
+    genome_test[length] = '\0';
+     if (align(pattern_test,genome_test))
+      return temp-current_pattern_length+1;
+    
+   }
+   else
+   {
+    current_pattern_length = result_length;
+   }
+  }
+  return 0;
+ }
+
+return 0;
+}
+
+
+//procedure which breaks input pattern and search each separately in FM index - Wavelet tree
+long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsigned int*result)
+{
+ unsigned int pattern_length = strlen(pattern);
+ unsigned int k,temp, length;
+ unsigned char pattern_half[pattern_length+2];
+ int i;
+ unsigned int result_length;
+ char current_error = 0, iter = 0;
+ 
+ //search last part of the pattern
+ unsigned char current_pattern_length = pattern_length/2 + 1;
+ unsigned char current_pattern_start = pattern_length - current_pattern_length;
+ memcpy(pattern_half, &pattern[current_pattern_start], current_pattern_length);
+ pattern_half[current_pattern_length] = '\0';
+result_length = search_pattern_in_FM_index_entry(pattern_half, current_pattern_length,result);
+ if (!(result_length))
+ {
+  //NO ERROR FOUND;
+  //TRY TO EXTEND UNTIL THRESHOLD;
+  result_length = extend_seed_in_FM_index_entry(pattern, current_pattern_start, result);
+  if (!(result_length))
+  {
+    printf("vraciam celucky vysledok\n");
+   return get_SA_value_entry(result[0]);
+  }
+
+  if (result[1]-result[0]<THRESHOLD)
+  {
+   /*printf("pocet vysledkov mensi nez threshold, skusim alignovat\n");
+   fflush(stdout);*/
+   while (result[0]!=result[1])
+   {
+    temp = get_SA_value_entry(result[0]) - result_length;
+    result[0]++;
+    unsigned char pattern_test[pattern_length+1];
+    memcpy(pattern_test, pattern, result_length+3);
     pattern_test[result_length+3] = '\0';
     k = 0;
     while (genome[temp-2]!=pattern_test[0])
@@ -905,32 +972,77 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
      {
       memcpy(genome_test, &genome[temp-2], result_length+3-k+1);
       genome_test[result_length+3-k+1] = '\0';
-      /*printf("1idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
-      fflush(stdout);*/
      }
      else 
      {
       memcpy(genome_test, &genome[temp-2], result_length+3);
       genome_test[result_length+3] = '\0';
-      /*printf("2idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
-      fflush(stdout);*/
      }
+     printf("1idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
+      fflush(stdout);
      if (align(pattern_test,genome_test))
       return temp-2;
     }
-     return 0;
+   }
+  }
+  else
+  {
+   /*printf("pocet vysledkov vacsi nez threshold\n");
+   fflush(stdout);*/
+   return 0;
+   // ELSE STORE HALF RESULTS TO SA_RESULTS AND THEN COMBINE
+  }
+ }
+ else 
+ {
+  current_pattern_length = current_pattern_start + result_length;
+
+  while (current_pattern_length > MIN_RESULT_LENGTH)
+  {
+   memcpy(pattern_half, pattern, current_pattern_length);
+   pattern_half[current_pattern_length] = '\0';
+   result_length = search_pattern_in_FM_index_entry(pattern_half, current_pattern_length, result);
+   if (!(result_length))
+   {
+
+    if (result[1]-result[0]>=THRESHOLD)
+      return 0;
+
+    else
+    while (result[0]!=result[1])
+   {
+    temp = get_SA_value_entry(result[0]) + current_pattern_length;
+    result[0]++;
+    length = pattern_length - current_pattern_length + 1; //zvysok
+    unsigned char pattern_test[pattern_length];
+    memcpy(pattern_test, &pattern[current_pattern_length-1], length);
+    pattern_test[length] = '\0';
+
+    unsigned char genome_test[pattern_length];
+
+    memcpy(genome_test, &genome[temp-1], length);
+    genome_test[length] = '\0';
+    printf("1idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
+      fflush(stdout);
+      
+     if (align(pattern_test,genome_test))
+      return temp-current_pattern_length+1;
+    }
+    return 0;
    }
    else
-   {
-    current_pattern_length = result_length;
-   }
+    {
+      current_pattern_length = result_length - 1;
+    }
+
+   
+    
   }
   return 0;
  }
 
 return 0;
 }
-
 //procedure for calculating square of dynamic programming matrix
 unsigned int calculate(int i, int j, int k)
 {
@@ -1005,29 +1117,10 @@ unsigned char align(char *p1, char*p2)
  
  //alignment = (char *) malloc((p1length+error+1)*sizeof(char));
  unsigned char matrix[p1length+1][p2length+1];
- /*printf("aligning.... %d %d\n",p1length, p2length);
- printf("-%s-\n-%s-\n",p1,p2);
- fflush(stdout);*/
+ for (i=0;i<p1length+1;i++)
+  for (j=0;j<p2length+1;j++)
+    matrix[i][j] = 0;
 
- /*matrix = (unsigned char **) malloc(sizeof(unsigned char*) * (p1length + 1));
- if (matrix == NULL)
- {
-  printf("error when malloc matrix\n");
-  fflush(stdout);
- }
- printf("matrix malloc success\n");
-  fflush(stdout);*/
- /*for (i=0;i<=p1length;i++)
- {
-  matrix[i] = (unsigned char *) calloc(p2length + 1,sizeof(unsigned char)); 
-  if (matrix[i] == NULL)
-  {
-   printf("error when malloc matrix i%d\n",i);
-  fflush(stdout);
-  }
-  printf("success when malloc matrix i%d\n",i);
-  fflush(stdout);
- }*/
  for (i=0;i<=max_error;i++)
   matrix[0][i] = 0;
  for (i=0;i<=max_error;i++)
@@ -1052,170 +1145,629 @@ unsigned char align(char *p1, char*p2)
 
  corrects = get_max_array(&matrix[p1length][p1length-max_error],2*max_error+1);
  corrects = corrects+p1length-max_error;
- if (p2length-max_error>matrix[p1length][corrects]){
-  printf("No alignment found\n");
-  /*for (i=0;i<=p2length;i++){
-  free(matrix[i]);
-  printf("NOfreed.%d %d..%d...\n",i,p1length,p2length);fflush(stdout);
-}
- printf("freed total\n");fflush(stdout);
- free(matrix);*/
+
+ for (i=p1length-max_error;i<=p1length;i++)
+ {
+  //printf("%d ",matrix[i][p2length]);
+  if ((i-matrix[i][p2length])<=max_error){
+    printf("vraciam 1 kvoli %d %d\n",i,matrix[i][p2length]);
+    return 1;
+  }
+  }
+  
+  for (i=p2length-max_error;i<=p2length;i++)
+  {
+    //printf("%d ",matrix[p1length][i]);
+    if ((i-matrix[p1length][i])<=max_error)
+    {
+      printf("vraciam 1 kvoli %d %d\n",i,matrix[p1length][i]);
+      return 1;
+    }
+  }
+  //printf("\n");
   return 0;
 }
- else
- {
-  printf("aligned....\n");fflush(stdout);
-/*for (i=0;i<=p2length;i++){
-  free(matrix[i]);
-  printf("freed.%d %d..%d...\n",i,p1length,p2length);fflush(stdout);}
 
-  printf("freed total\n");fflush(stdout);
- free(matrix);
-  
-  printf("freed....\n");fflush(stdout);*/
-return 1;
-
-   alignment_length = p1length+(p1length - matrix[p1length][corrects])+1;
-   alignment1 = (char *) malloc(alignment_length*sizeof(char));
-   alignment2 = (char *) malloc(alignment_length*sizeof(char));
-   alignment1[alignment_length-1] = '\0';
-   alignment2[alignment_length-1] = '\0';
-   currentY = corrects;
-   currentX = p1length;
-   for (i = alignment_length-2;i>0;i--)
-   {
-    if (currentX==0 || currentY==0)
-      break;
-    nearestMax = get_nearest_max(matrix[currentX-1][currentY-1],matrix[currentX-1][currentY],matrix[currentX][currentY-1]);
-    //if (matrix[currentX][currentY]-1 == matrix[currentX-1][currentY-1]) || (matrix[currentX][currentY]+1 == matrix[currentX-1][currentY-1])
-    if (nearestMax==1){
-      alignment1[i] = p1[currentX-1];
-      alignment2[i] = p2[currentY-1];
-      currentX = currentX - 1;
-      currentY = currentY - 1; 
-    }
-    else if (nearestMax==2){
-      //printf("nearestMax2 je %d\n",matrix[currentX-1][currentY]);
-      if (matrix[currentX-1][currentY]-1 == matrix[currentX][currentY]){
-       alignment1[i] = p1[currentX-1];
-       alignment2[i] = '-';
-       currentX = currentX - 1;
-      }
-      else
-      {
-       //printf("cant get there %d %d\n",currentX,currentY);
-       alignment1[i] = p1[currentX-1];
-       alignment2[i] = p2[currentY-1];
-       currentX = currentX - 1;
-       currentY = currentY - 1; 
-      }
-    }
-    else{
-      //printf("nearestMax3 je %d\n",matrix[currentX][currentY-1]);
-      if (matrix[currentX][currentY-1]-1 == matrix[currentX][currentY]){
-       alignment1[i] = '-';
-       alignment2[i] = p2[currentY-1];
-       currentY = currentY - 1;
-      }
-      else
-      {
-       //printf("cant get there %d %d\n",currentX,currentY);
-       alignment1[i] = p1[currentX-1];
-       alignment2[i] = p2[currentY-1];
-       currentX = currentX - 1;
-       currentY = currentY - 1; 
-      }
-    }
-
-   }
-   //printf("%d i je %d, c %d %d\n",nearestMax,i,currentX,currentY);
-   if (currentX==1)
-   {
-    if (currentY==1){
-     alignment1[i] = p1[0];
-     alignment2[i] = p2[0];
-    }
-    else{
-     alignment1[i] = p1[0];
-     alignment2[i] = '-';
-    }
-   }
-   else if (currentY==1)
-   {
-    alignment1[i] = '-';
-    alignment2[i] = p2[0];
-   } 
-   while (i>=0){
-    alignment1[i] = ' ';
-    alignment2[i] = ' ';
-    i--;
-   }
-   printf("%s\n",alignment1);
-   printf("%s\n",alignment2);
-   printf("errors: %d\n",alignment_length - p2length-1);
- }
-
- free(alignment1);
- free(alignment2);
- for (i=0;i<=p1length;i++)
-  free(matrix[i]);
- free(matrix);
- return 1;
-}
-
-/*
-//create FM Index which uses wavelet tree to compress BWT string
-struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *bwt)
+void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt)
 {
- unsigned int i;
- struct FMIndex_WT *FM_index_WT = (struct FMIndex_WT*) malloc(sizeof(struct FMIndex_WT));
- printf("...constructing huffman shaped wavelet tree... \n");
- //create count table and also create frequency table for huffman tree
- FM_index_WT->count_table = create_count_table(bwt);
- unsigned int*frequencies = (unsigned int*)malloc(sizeof(unsigned int)*strlen(alphabet));
- clock_t begin = clock();
- for (i=0;i<strlen(alphabet)-1;i++)
-  frequencies[i] = FM_index_WT->count_table[i+1] - FM_index_WT->count_table[i];
- frequencies[i] = genome_length - FM_index_WT->count_table[i];
+
+  unsigned int i = 0, a;
+  unsigned int chars_in_entry = 256;
+  
+  count_table = create_count_table(bwt);
+  unsigned int bitword; unsigned int bit_index;
+
+  unsigned int sample_sa_part = chars_in_entry/sample_SA_size;  //8*4 = 32
+  unsigned int bits_part = chars_in_entry/8/sizeof(unsigned int); //8*4 = 32
+  unsigned int children_part = bits_part + 1; //9*4 = 36
+  unsigned int aux_part = 2; //2*4 = 8
+  unsigned int occ_root_part = 2; //2*4 = 8
+  unsigned int total = (genome_length+255) / 256;
+  
+  entries = (unsigned int*) calloc((total+1)*32,sizeof(unsigned int)); //128/4 = 32
+
+  printf("alokujem %d\n", (total)*32);
+  //iterators
+  unsigned int sa_iter = 0;
+  unsigned int bit_iter = 0;
+  unsigned int left_iter = 0;
+  unsigned int right_iter = 0;
+  unsigned int root_counter_iter = 0;
+  unsigned int left_counter_iter = 0;
+  unsigned int right_counter_iter = 0;
+
+
+  unsigned int left_count = 0;
+  unsigned int right_count = 0;
+
+  unsigned int WARP_SIZE = 128;
+unsigned int remainder;
+
+ unsigned int frequencies[4];
+ for (i=0;i<strlen(alphabet);i++)
+  frequencies[i] = 1;
 
  //store bwt in Huffman-shaped wavelet tree
- FM_index_WT->WT_root = build_huffman_shaped_WT(bwt,frequencies);
-  clock_t end = clock();
- double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
- printf("construction of wavelet tree took %lf seconds\n", time_spent);
- fflush(stdout);
-
+ struct wavelet_tree *root = build_huffman_shaped_WT(bwt,frequencies);
+ struct wavelet_tree *left = root->left;
+ struct wavelet_tree *right = root->right; 
  printf("suffix array sample memory: %d bytes\n",((genome_length+sample_SA_size)/sample_SA_size)*sizeof(unsigned int));
- FM_index_WT->end = find_end(suffix_array);
- FM_index_WT->sampleSA = create_sample_SA(suffix_array);
- free(suffix_array);
- printf("construction of FM Index finished\n");
- fflush(stdout);
- return FM_index_WT;
-}*/
+ unsigned int*sampleSA = create_sample_SA(suffix_array);
+  
+
+
+
+  //A - 00
+//T - 01
+//C - 10
+//G - 11
+
+ i = 0;
+ while (--total)
+ {
+
+  //store wt root - positions 8..15
+  //printf("zacinam zapisovat %d ROOT na poziciu %d\n",bit_iter,i); //8 pre pozicie 0..7
+ right_count = 0;
+ for (a = 0; a<bits_part/2;a++)
+ {
+  entries[i++] = root->bitvector[bit_iter]>>32; 
+  entries[i++] = root->bitvector[bit_iter];
+  right_count += __builtin_popcountll(root->bitvector[bit_iter]);
+  bit_iter++;
+ }
+ left_count = 256 - right_count;
+ 
+ //printf("zacinam zapisovat LEFT_INFO na poziciu %d\n",i); //1 pre info? ..8
+ //store children info about how many
+ entries[i++] = (left_count+32)/32; 
+ 
+ 
+ //printf("zacinam zapisovat %d left CHILDREN %d na poziciu %d\n",left_iter, left_count, i); // 9..17
+ //store wt_children positions
+ 
+ bitword = 0;
+ bit_index = 0;
+ for (a = (i/32)*256; a<((i/32)+1)*256;a++)
+ {
+  if (bwt[a]=='A' || bwt[a]=='T')
+  {
+   if (bwt[a]=='T')
+   {
+    bitword = bitword<<1;
+    bitword = bitword + 1;
+    bit_index++;
+   }
+   else
+   {
+    bitword = bitword<<1;
+    bit_index++;
+   }
+
+   if (bit_index==32)
+   {
+    //printf("ukadam bitword %u\n",bitword);
+    entries[i++] = bitword;
+    bit_index = 0;
+    bitword = 0;
+   }
+  }
+ }
+
+if (bit_index){
+ entries[i++] = bitword << (32-bit_index);
+ //printf("ukadama bitword\n");
+}
+else
+  entries[i++] = 0;
+
+//printf("zacinam zapisovat %d rigthCHILDREN %d na poziciu %d\n",right_iter, right_count, i);
+ 
+ bitword = 0;
+ bit_index = 0;
+ for (a = (i/32)*256; a<((i/32)+1)*256;a++)
+ {
+  if (bwt[a]=='C' || bwt[a]=='G')
+  {
+   if (bwt[a]=='C')
+   {
+    bitword = bitword<<1;
+    bitword = bitword + 1;
+    bit_index++;
+   }
+   else
+   {
+    bitword = bitword<<1;
+    bit_index++;
+   }
+
+   if (bit_index==32)
+   {
+    //printf("ukadam bitword %u\n",bitword);
+    entries[i++] = bitword;
+    bit_index = 0;
+    bitword = 0;
+   }
+  }
+ }
+
+if (bit_index) {
+ entries[i++] = bitword << (32-bit_index);
+ //printf("ukadama bitword\n");
+ }
+ //printf("zacinam zapisovat OCC_ROOT na poziciu %d\n",i);  //2hodnoty 18..19
+ //store counters
+ 
+ if (root_counter_iter)
+ {
+  entries[i++] = count_unset_bits(root->bitvector,root_counter_iter-1,root->bitcount_table);
+  entries[i++] = count_set_bits(root->bitvector,root_counter_iter-1,root->bitcount_table);
+ }
+ else
+ {
+  entries[i++] = 0;
+  entries[i++] = 0;
+ }
+ root_counter_iter = root_counter_iter + 256;
+
+ /*printf("zacinam zapisovat %d left_OCC_CHILDREN na poziciu %d\n",left_counter_iter,i); //2hodnoty 20..21
+ fflush(stdout);*/
+ if (left_counter_iter)
+ {
+  entries[i++] = count_unset_bits(left->bitvector,left_counter_iter-1,left->bitcount_table);
+  entries[i++] = count_set_bits(left->bitvector,left_counter_iter-1,left->bitcount_table);
+ }
+ else
+ {
+  entries[i++] = 0;
+  entries[i++] = 0;
+ }
+ left_counter_iter = left_counter_iter + left_count;
+ 
+ //printf("zacinam zapisovat %d right_OCC_CHILDREN na poziciu %d\n",right_counter_iter,i); //2hodnoty 22..23
+ if (right_counter_iter)
+ {
+ entries[i++] = count_unset_bits(right->bitvector,right_counter_iter-1,right->bitcount_table);
+ entries[i++] = count_set_bits(right->bitvector,right_counter_iter-1,right->bitcount_table);
+ }
+ else
+ {
+  entries[i++] = 0;
+  entries[i++] = 0;
+ }
+ right_counter_iter = right_counter_iter + right_count;
+
+ /*printf("zacinam zapisovat %d SA_VALS na poziciu %d\n",sa_iter,i); //8hodnot 24..31
+ fflush(stdout);*/
+ //storing SA_values
+ for (a = 0; a<sample_sa_part;a++)
+  entries[i++] = sampleSA[sa_iter++];
+  
+ //8 pre SA, 6 pre OCC, 17 pre bity, 1 pre info
+
+}
+
+
+//printf("idem zapisat zvysky\n");
+//printf("zacinam zapisovat %d ROOT na poziciu %d\n",bit_iter,i); //8 pre pozicie 0..7
+ right_count = 0;
+ for (a = 0; a<bits_part/2;a++)
+ {
+  if (bit_iter*64 >= genome_length)
+  {
+    i++;
+    i++;
+  }
+  else
+  {
+   entries[i++] = root->bitvector[bit_iter]>>32; 
+   entries[i++] = root->bitvector[bit_iter];
+   right_count += __builtin_popcountll(root->bitvector[bit_iter]);
+   bit_iter++;
+  }
+ }
+ left_count = (genome_length - (i/32)*256) - right_count;
+ 
+ //printf("zacinam zapisovat LEFT_INFO %d na poziciu %d\n",((left_count+32)/32),i); //1 pre info? ..8
+ //store children info about how many
+ entries[i++] = (left_count+32)/32; 
+ 
+ 
+ //printf("zacinam zapisovat %d left CHILDREN %d na poziciu %d\n",left_iter, left_count, i); // 9..17
+ //store wt_children positions
+ 
+ bitword = 0;
+ bit_index = 0;
+ for (a = (i/32)*256; a<genome_length;a++)
+ {
+  if (bwt[a]=='A' || bwt[a]=='T')
+  {
+   if (bwt[a]=='T')
+   {
+    bitword = bitword<<1;
+    bitword = bitword + 1;
+    bit_index++;
+   }
+   else
+   {
+    bitword = bitword<<1;
+    bit_index++;
+   }
+
+   if (bit_index==32)
+   {
+    //printf("ukadam bitword %u\n",bitword);
+    entries[i++] = bitword;
+    bit_index = 0;
+    bitword = 0;
+   }
+  }
+ }
+
+if (bit_index){
+ entries[i++] = bitword << (32-bit_index);
+ //printf("ukadama bitword\n");
+}
+else
+  entries[i++] = 0;
+
+
+//printf("zacinam zapisovat %d rigthCHILDREN %d na poziciu %d\n",right_iter, right_count, i);
+ bitword = 0;
+ bit_index = 0;
+ for (a = (i/32)*256; a<genome_length;a++)
+ {
+  if (bwt[a]=='C' || bwt[a]=='G')
+  {
+   if (bwt[a]=='C')
+   {
+    bitword = bitword<<1;
+    bitword = bitword + 1;
+    bit_index++;
+   }
+   else
+   {
+    bitword = bitword<<1;
+    bit_index++;
+   }
+
+   if (bit_index==32)
+   {
+    //printf("ukadam bitword %u\n",bitword);
+    entries[i++] = bitword;
+    bit_index = 0;
+    bitword = 0;
+   }
+  }
+ }
+
+if (bit_index) {
+ entries[i++] = bitword << (32-bit_index);
+ //printf("ukadama bitword\n");
+ }
+
+
+ while (i%32 != 18)
+  i++;
+
+
+//printf("zacinam zapisovat OCC_ROOT na poziciu %d\n",i);  //2hodnoty 18..19
+ //store counters
+ 
+ if (root_counter_iter)
+ {
+  entries[i++] = count_unset_bits(root->bitvector,root_counter_iter-1,root->bitcount_table);
+  entries[i++] = count_set_bits(root->bitvector,root_counter_iter-1,root->bitcount_table);
+ }
+ else
+ {
+  entries[i++] = 0;
+  entries[i++] = 0;
+ }
+ root_counter_iter = root_counter_iter + 256;
+
+ /*printf("zacinam zapisovat %d left_OCC_CHILDREN na poziciu %d\n",left_counter_iter,i); //2hodnoty 20..21
+ fflush(stdout);*/
+ if (left_counter_iter)
+ {
+  entries[i++] = count_unset_bits(left->bitvector,left_counter_iter-1,left->bitcount_table);
+  entries[i++] = count_set_bits(left->bitvector,left_counter_iter-1,left->bitcount_table);
+ }
+ else
+ {
+  entries[i++] = 0;
+  entries[i++] = 0;
+ }
+ left_counter_iter = left_counter_iter + left_count;
+ 
+ //printf("zacinam zapisovat %d right_OCC_CHILDREN na poziciu %d\n",right_counter_iter,i); //2hodnoty 22..23
+ if (right_counter_iter)
+ {
+ entries[i++] = count_unset_bits(right->bitvector,right_counter_iter-1,right->bitcount_table);
+ entries[i++] = count_set_bits(right->bitvector,right_counter_iter-1,right->bitcount_table);
+ }
+ else
+ {
+  entries[i++] = 0;
+  entries[i++] = 0;
+ }
+ right_counter_iter = right_counter_iter + right_count;
+
+ /*printf("zacinam zapisovat %d SA_VALS na poziciu %d\n",sa_iter,i); //8hodnot 24..31
+ fflush(stdout);*/
+ //storing SA_values
+ for (a = 0; a<sample_sa_part;a++)
+  entries[i++] = sampleSA[sa_iter++];
+
+
+
+
+
+
+free(sampleSA);
+
 /*
-unsigned int **rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt){
+  printf("entries 0az1 su %llu %llu \n",root->bitvector[0],root->bitvector[1]);
+  printf("lefty su %llu %llu \n",left->bitvector[0],left->bitvector[1]);
+  printf("right su %llu %llu %llu\n",right->bitvector[0],right->bitvector[1],right->bitvector[2]);*/
 
-  unsigned int i;
-  
-  unsigned int *count_table = create_count_table(bwt);
+}
 
-  //unsigned int *sa_values = FMIndex_WT->sampleSA;
 
+//procedure for searching pattern in compressed BWT of FM Index
+unsigned char search_pattern_in_FM_index_entry(char *pattern, unsigned char current_pattern_length, unsigned int*result)
+{
+
+ int j = current_pattern_length - 1;
+ int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
+ unsigned int start,end;
+ 
+ result[0] = count_table[alphabet_index];
+ if (alphabet_index!=alphabet_size)
+  result[1] = count_table[alphabet_index + 1]-1;
+ else 
+ {
+  result[1] = genome_length-1;
+ }
+ 
+ while (j>0 && result[0]<result[1])
+  {
+   alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
+   result[0] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
+   result[1] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
+  }
+
+ if (result[0]>=result[1])
+ {
+  result[1]--;
+  return j;
+ }
+ 
+ return j;
+}
+
+unsigned int wt_rank_entry(unsigned char c, unsigned int position)
+{
+ unsigned int i;
+ unsigned int entry_index = (position/256) * 32; //in each entry up to 256 chars
+ unsigned int in_entry_index = position%256; //v danom entry
+ unsigned int count = 0;
+ unsigned int result = 0;
+ unsigned int a = in_entry_index;
+ unsigned int remainder = in_entry_index;
+
+  //spocitaju sa 1ky od zaciatku entry po dany in_entry_index
+  for (i=0;i<in_entry_index/32;i++)
+  {
+    count = count + __builtin_popcount(entries[entry_index+i]);
+    remainder = remainder - 32;
+  }
+  if (remainder)
+   count = count + __builtin_popcount(entries[entry_index+i]>>(32-remainder));
+
+ if (c == 'A' || c == 'T')
+ {
+  //bolo nutne spocitat nuly, preto invertujem
+  count = in_entry_index - count;
+
+  //spocitam 1 do pozicie count
+  remainder = count;
+  for (i=0;i<count/32;i++)
+    {
+     result = result + __builtin_popcount(entries[entry_index+9+i]);
+     remainder = remainder - 32;
+    }
   
-  unsigned int NUMBER_OF_STRINGS = genome_length;
-  unsigned int WARP_SIZE = 128;
-  unsigned int entries[NUMBER_OF_STRINGS][WARP_SIZE/sizeof(unsigned int)]; //128/4 = 32
+  if (remainder)
+   result = result + __builtin_popcount(entries[entry_index+9+i]>>(32-remainder));
+
+  if (c=='A')
+   return (count - result + entries[entry_index + 20]);
   
-  //entries[i][0] = sa values[++j];
-    entries[i][1] = sa_values[++j];
-    entries[i][2] = sa_values[++j];
-    entries[i][3] = sa_values[++j];
-    entries[i][4] = occ_root[++r];
-    entries[i][5] = occ_left[++lc];
-    entries[i][6] = occ_right[++rc];
-    entries[i][7] = 
+  else
+    return (result + entries[entry_index + 21]);
+ }
+
+ else 
+ {
+  a = entries[entry_index + 8]; //kolko bolo v left?
+  remainder = count;
+  for (i=0;i<count/32;i++)
+  {
+   result = result + __builtin_popcount(entries[entry_index+9+a+i]);
+   remainder = remainder - 32;
+  }
+  if (remainder)
+   result = result + __builtin_popcount(entries[entry_index+9+a+i]>>(32-remainder));
+
+  if (c=='G')
+   return (count - result + entries[entry_index + 22]);
+
+  else
+   return (result + entries[entry_index + 23]);
+ }
+}
+
+unsigned int get_SA_value_entry(unsigned int bwt_position)
+{
+ unsigned int count = 0;
+ unsigned int entry_index; //in each entry up to 256 chars
+ unsigned short int in_entry_index; //v danom entry
+ unsigned int character;
+ unsigned char c;
+ while(bwt_position%sample_SA_size!=0)
+ {
+  entry_index = (bwt_position/256) * 32;
+  in_entry_index = bwt_position%256;
+  c = wt_access_entry(entry_index, in_entry_index);
+  character = get_alphabet_index(alphabet,c);
+  bwt_position = count_table[character] + wt_rank_entry(c, bwt_position);
+  count++;
+
+ }
+
+ entry_index = (bwt_position/256) * 32;
+ in_entry_index = bwt_position%256;
+ unsigned int result = entries[entry_index + 24 + in_entry_index/32] + count;
+ 
+ if (result>=genome_length)
+  result = result - genome_length;
+
+ return result;
+}
+
+
+//function which returns character on input position
+unsigned char wt_access_entry(unsigned int entry_index, unsigned short int in_entry_index)
+{
+ unsigned int i;
+ unsigned int count = 0;
+ unsigned int a = in_entry_index;
+ unsigned int remainder = in_entry_index;
+ //printf("indexy su %d %d \n",entry_index,in_entry_index);
+  //spocitaju sa 1ky od zaciatku entry po dany in_entry_index
+
+  for (i=0;i<in_entry_index/32;i++)
+  {
+    count = count + __builtin_popcount(entries[entry_index+i]);
+    //printf("count je %d\n",count);
+    remainder = remainder - 32;
+  }
+  if (remainder){
+    //printf("hm remmainder %d\n",remainder);
+   count = count + __builtin_popcount(entries[entry_index+i]>>(32-remainder));
+  }
+  
+
+
+  //printf("wut count je %d, i je%d\n",count,i);
+  if (get_bit_4byte(entries[entry_index + i],remainder))
+  {
+
+    //printf("pocitam 1, entry_index %d\n",entry_index);
+    //aky znak na count pozicii?
+    a = entries[entry_index+8];
     
+    //remainder = count%32;
 
-return entries;
-}*/
+    //printf("pre count %u, pristupujem na poziciu %u %u\n",count,count/sample_SA_size,remainder);
+    //printf("entries[%d] je %u\n",entry_index + 9 + a + count/32, entries[entry_index + 9 + a + count/32]);
+    if (get_bit_4byte(entries[entry_index + 9 + a + count/32], count%32))
+      return 'C';
+    else
+      return 'G';
+  }
+
+  else
+  {
+    
+    //pre nulu je potrebne spocitat nuly, preto invertujem
+    count = in_entry_index - count;
+
+    if (get_bit_4byte(entries[entry_index + 9 + count / 32], count % 32))
+      return 'T';
+    else
+      return 'A';
+  }
+}
+
+
+//procedure for searching pattern in compressed BWT of FM Index
+void threshold_search_pattern_in_FM_index_entry(char *pattern, unsigned int *result_length, unsigned int *result, unsigned int pattern_length)
+{
+ unsigned int start, end;
+ int j = pattern_length - 1;
+ int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
+
+ result[0] = count_table[alphabet_index];
+ if (alphabet_index!=alphabet_size)
+  result[1] = count_table[alphabet_index + 1]-1;
+ else 
+ {
+  result[1] = genome_length-1;
+ }
+ //printf("\n****rozsah je %d az %d \n",result[0],result[1]);
+ while (j>0 && result[0]<result[1])
+ {
+  alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
+  
+  result[0] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
+  result[1] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
+}
+
+ *result_length = j;
+
+  if (j>0 && result[0]>=result[1]){
+  result[1]--;
+ }
+}
+
+unsigned int extend_seed_in_FM_index_entry(unsigned char*pattern, unsigned int last, unsigned int*result)
+{
+ int j = last;
+ int alphabet_index;
+ unsigned int start,end;
+ /*printf("skoncil som na  = %d, znak %c\n",j, pattern[j]);
+ printf("\n****rozsah je %d az %d \n",result[0],result[1]);*/
+ while (j>0)
+ {
+  alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
+  start = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
+  end = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
+  //printf("**%d**rozsah je %d az %d \n",j,result[0],result[1]);
+  if (start>=end){
+    return j;
+  }
+  else {
+    result[0] = start;
+    result[1] = end;
+  }
+ }
+ /*if (result[0]>=result[1])
+ {
+  result[1]--;
+  return j;
+ }*/
+
+ return j;
+}

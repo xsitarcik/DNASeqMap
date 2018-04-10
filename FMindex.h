@@ -10,6 +10,8 @@ extern int MIN_RESULT_LENGTH;
 extern struct FMIndex_WT *FM_index_WT;
 extern unsigned char*genome;
 extern struct wavelet_tree *WT_root;
+extern unsigned int*count_table;
+extern unsigned int*entries;
 
 struct FMIndex
 {
@@ -26,7 +28,6 @@ struct FMIndex
 struct FMIndex_WT
 {
 unsigned int end;
-unsigned int *count_table;
 unsigned int *sampleSA;
 };
 
@@ -44,6 +45,14 @@ struct compressedFMIndex
  struct compressed_block *array_of_blocks;
 };
 
+long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsigned int*result);
+void threshold_search_pattern_in_FM_index_entry(char *pattern, unsigned int *result_length, unsigned int *result, unsigned int pattern_length);
+unsigned int extend_seed_in_FM_index_entry(unsigned char*pattern, unsigned int last, unsigned int*result);
+unsigned char search_pattern_in_FM_index_entry(char *pattern, unsigned char current_pattern_length, unsigned int*result);
+unsigned int get_SA_value_entry(unsigned int bwt_position);
+unsigned char wt_access_entry(unsigned int entry_index, unsigned short int in_entry_index);
+unsigned int wt_rank_entry(unsigned char c, unsigned int position);
+void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt);
 struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *bwt);
 struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned char *bwt);
 struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, unsigned char *bwt,

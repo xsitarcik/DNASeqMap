@@ -9,25 +9,28 @@
 
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
-unsigned int sample_OCC_size = 3; //in reality it's *64
+unsigned int sample_OCC_size = 2; //in reality it's *64, MUST SET TO 2
 unsigned int sample_SA_size = 32;
 unsigned char max_error = 1;
 int MAX_RESULTS = 200;
-int MIN_RESULT_LENGTH = 50; //pattern length /(maxerrror+1) / 2;
+int MIN_RESULT_LENGTH = 40; //pattern length /(maxerrror+1) / 2;
 
 //program parameters
 unsigned char save = 0;
 unsigned char *save_name = "alt_Celera_chr15_bwt_withoutN.txt";
 
 unsigned char load = 1;
-unsigned char *load_name = "alt_Celera_chr15_bwt_withoutN.txt";
-//unsigned char *load_name = "patdesiattisic_bwt2.txt";
+
+/*unsigned char *load_name = "patdesiattisic_bwt2.txt";
+unsigned char*filename_text = "patdesiattisic.txt";
+unsigned char*filename_patterns = "meko.fa";*/
 
 unsigned char*filename_text = "alt_Celera_chr15.fa";
-//unsigned char*filename_text = "patdesiattisic.txt";
+unsigned char *load_name = "alt_Celera_chr15_bwt_withoutN.txt";
 
 //unsigned char*filename_patterns = "results_bowtie_error1.txt";
 unsigned char*filename_patterns = "SRR493095.fasta";
+
 unsigned int MAX_READ_LENGTH = 200;
 unsigned int READS_CHUNK = 70;
 
@@ -43,7 +46,8 @@ unsigned char flag_compress = 0;
 unsigned char flag_runs = 7;
 unsigned char flag_mtf = 1;
 unsigned char flag_huffman = 1;
-unsigned char flag_wavelet_tree = 1;
+unsigned char flag_wavelet_tree = 0;
+unsigned char flag_entries = 1;
 
 //global program parametrrs
 unsigned int genome_length;
@@ -51,6 +55,8 @@ unsigned int genome_length;
  struct wavelet_tree *WT_root;
 unsigned char max_bits = sizeof(unsigned long long int)*8;
 unsigned char*genome;
+unsigned int*count_table;
+unsigned int*entries;
 
 int main ( int argc, char *argv[] )
 {
@@ -74,7 +80,10 @@ int main ( int argc, char *argv[] )
  }*/
 
  genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
+ //genome = load_genome_from_file(filename_text,&genome_length);
+
  printf("loaded genome\n");
+
  if (load)
  {
   fp = fopen(load_name,"r");
@@ -207,12 +216,12 @@ if (save)
 
   //build FM Index with WT for backward search
   FM_index_WT = build_FM_index_WT(suffix_array,bwt);
- 
+  
   printf("--------------------------------------\n");
+  
   char c;
   unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
-  unsigned int *half_result = (unsigned int*) malloc (sizeof(unsigned int)*2);
-  if (result == NULL || half_result == NULL)
+  if (result == NULL)
   {
    printf("error pri alokacii\n");
    exit(-1);
@@ -231,7 +240,6 @@ if (save)
     fgets(&pattern[i*READS_CHUNK], READS_CHUNK+2, fh_patterns );
    }
 
-   //printf("k%d-%s-\n",k,pattern);
    pattern[strlen(pattern)-1]='\0';
    k++;
    if (strchr(pattern,'N')==NULL)
@@ -251,6 +259,7 @@ if (save)
   printf("It took %lf seconds\n", time_spent1);
   printf("Total aligned reads: %d\n",count);
   printf("Total reads: %d\n",k);
+
   //long long int result = approximate_search_in_FM_index_WT(max_errors,FM_index_WT,"TCGATTATATCACTTAATGACTTTTGGGTCAGGGTGTGTTACCTTACAGGAATTGAGACCGTCCATTAATTTCTCTTGCATTTAT");
   //printf("result je %lld\n",result);
   //build FM Index with WT for forward search
@@ -271,9 +280,60 @@ if (save)
   
 
   free(FM_index_WT->sampleSA);
-  free(FM_index_WT->count_table);
+  free(count_table);
   free(WT_root);
   free(FM_index_WT);
+ }
+ else if (flag_entries)
+ {
+
+  printf("rebuilding index...\n");
+  fflush(stdout);
+
+  rebuild_FM_index_into_entries(suffix_array,bwt);
+  
+  char c;
+  unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
+  if (result == NULL)
+  {
+   printf("error pri alokacii\n");
+   exit(-1);
+  }
+
+  printf("...approximate searching...\n");
+  k = 0;
+  count = 0;
+
+  clock_t begin1 = clock();
+  //get name of the read
+  while (fgets(pattern, MAX_READ_LENGTH, fh_patterns) != NULL) 
+  { 
+   for (i=0;i<3;i++)
+   {
+    fgets(&pattern[i*READS_CHUNK], READS_CHUNK+2, fh_patterns );
+   }
+   pattern[strlen(pattern)-1]='\0';
+   k++;
+   if (strchr(pattern,'N')==NULL)
+   {
+    result_map = approximate_search_in_FM_index_entry(pattern,result);
+    if (result_map)
+    {
+     ++count;
+     printf("-%s-\n",pattern);
+     fflush(stdout);
+     printf("approximate position is %d\n",result_map);
+    }
+   }
+  }
+
+  clock_t end1 = clock();
+  double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
+  printf("It took %lf seconds\n", time_spent1);
+  printf("Total aligned reads: %d\n",count);
+  printf("Total reads: %d\n",k);
+  
+
  }
  else
  {
