@@ -14,6 +14,9 @@ unsigned int sample_SA_size = 32;
 unsigned char max_error = 1;
 int MAX_RESULTS = 200;
 int MIN_RESULT_LENGTH = 40; //pattern length /(maxerrror+1) / 2;
+unsigned int THRESHOLD = 150;
+
+//>SRR493095.1 M00282:31:000000000-A0FFK:1:1:13945:1807 length=150
 
 //program parameters
 unsigned char save = 0;
@@ -29,7 +32,7 @@ unsigned char*filename_text = "alt_Celera_chr15.fa";
 unsigned char *load_name = "alt_Celera_chr15_bwt_withoutN.txt";
 
 //unsigned char*filename_patterns = "results_bowtie_error1.txt";
-unsigned char*filename_patterns = "SRR493095.fasta";
+unsigned char*filename_patterns = "SRR493095final.fasta";
 
 unsigned int MAX_READ_LENGTH = 200;
 unsigned int READS_CHUNK = 70;
@@ -332,8 +335,6 @@ if (save)
   printf("It took %lf seconds\n", time_spent1);
   printf("Total aligned reads: %d\n",count);
   printf("Total reads: %d\n",k);
-  
-
  }
  else
  {

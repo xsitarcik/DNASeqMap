@@ -12,6 +12,7 @@ extern unsigned char*genome;
 extern struct wavelet_tree *WT_root;
 extern unsigned int*count_table;
 extern unsigned int*entries;
+extern unsigned int THRESHOLD;
 
 struct FMIndex
 {

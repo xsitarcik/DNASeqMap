@@ -5,7 +5,7 @@
 #include "compression.h"
 #include <time.h>
 
-unsigned int THRESHOLD = 3;
+
 
 //create FM Index which uses wavelet tree to compress BWT string
 struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *bwt)
@@ -657,7 +657,7 @@ unsigned char search_pattern_in_FM_index_WT(char *pattern, unsigned char current
    alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
    result[0] = count_table[alphabet_index] + wt_rank(pattern[j], result[0], WT_root);
    result[1] = count_table[alphabet_index] + wt_rank(pattern[j], result[1], WT_root);
-   //printf("**%d**rozsah je %d az %d \n",j,result[0],result[1]);
+   //printf("**%d**rozsah je %daz %d \n",j,result[0],result[1]);
   }
 
 
@@ -831,6 +831,7 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
    fflush(stdout);*/
    while (result[0]!=result[1])
    {
+
     temp = get_SA_value_WT(result[0]) - result_length;
     result[0]++;
     
@@ -919,130 +920,93 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
 return 0;
 }
 
-
 //procedure which breaks input pattern and search each separately in FM index - Wavelet tree
 long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsigned int*result)
 {
  unsigned int pattern_length = strlen(pattern);
- unsigned int k,temp, length;
+ unsigned int k,temp, length,j;
  unsigned char pattern_half[pattern_length+2];
- int i;
- unsigned int result_length;
- char current_error = 0, iter = 0;
+ unsigned int result_length, current_pattern_start;
+ char current_error = 0;
  
+ unsigned int perfect_results[(max_error+1) * 4];
  //search last part of the pattern
- unsigned char current_pattern_length = pattern_length/2 + 1;
- unsigned char current_pattern_start = pattern_length - current_pattern_length;
- memcpy(pattern_half, &pattern[current_pattern_start], current_pattern_length);
- pattern_half[current_pattern_length] = '\0';
-result_length = search_pattern_in_FM_index_entry(pattern_half, current_pattern_length,result);
- if (!(result_length))
- {
-  //NO ERROR FOUND;
-  //TRY TO EXTEND UNTIL THRESHOLD;
-  result_length = extend_seed_in_FM_index_entry(pattern, current_pattern_start, result);
-  if (!(result_length))
-  {
-    printf("vraciam celucky vysledok\n");
-   return get_SA_value_entry(result[0]);
-  }
+ unsigned char searching_part[pattern_length];
+ unsigned int div_pattern_length = (pattern_length+1)/(max_error+1);
+ unsigned int current_pattern_length = pattern_length;
 
-  if (result[1]-result[0]<THRESHOLD)
-  {
-   /*printf("pocet vysledkov mensi nez threshold, skusim alignovat\n");
-   fflush(stdout);*/
-   while (result[0]!=result[1])
-   {
-    temp = get_SA_value_entry(result[0]) - result_length;
-    result[0]++;
-    unsigned char pattern_test[pattern_length+1];
-    memcpy(pattern_test, pattern, result_length+3);
-    pattern_test[result_length+3] = '\0';
-    k = 0;
-    while (genome[temp-2]!=pattern_test[0])
-    {
-     temp++;
-     k++;
-    }
-    //printf("k je %d\n",k);
-    if (k<=max_error+1)
-    {
-      unsigned char genome_test[pattern_length+2];
-     if (k>0)
-     {
-      memcpy(genome_test, &genome[temp-2], result_length+3-k+1);
-      genome_test[result_length+3-k+1] = '\0';
-     }
-     else 
-     {
-      memcpy(genome_test, &genome[temp-2], result_length+3);
-      genome_test[result_length+3] = '\0';
-     }
-     printf("1idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
-      fflush(stdout);
-     if (align(pattern_test,genome_test))
-      return temp-2;
-    }
-   }
-  }
+ int i = max_error;
+
+
+ while(i>=0 && current_error<=max_error)
+ {
+  
+  current_pattern_start = i*div_pattern_length;
+  current_pattern_length = current_pattern_length - current_pattern_start;
+  memcpy( searching_part, &pattern[current_pattern_start], current_pattern_length);
+  searching_part[current_pattern_length] = '\0';
+  
+  result_length = search_pattern_in_FM_index_entry(searching_part,current_pattern_length, result);
+  if (result_length)
+    current_error++;
   else
   {
-   /*printf("pocet vysledkov vacsi nez threshold\n");
-   fflush(stdout);*/
-   return 0;
-   // ELSE STORE HALF RESULTS TO SA_RESULTS AND THEN COMBINE
-  }
- }
- else 
- {
-  current_pattern_length = current_pattern_start + result_length;
-
-  while (current_pattern_length > MIN_RESULT_LENGTH)
-  {
-   memcpy(pattern_half, pattern, current_pattern_length);
-   pattern_half[current_pattern_length] = '\0';
-   result_length = search_pattern_in_FM_index_entry(pattern_half, current_pattern_length, result);
-   if (!(result_length))
-   {
-
-    if (result[1]-result[0]>=THRESHOLD)
-      return 0;
-
-    else
-    while (result[0]!=result[1])
-   {
-    temp = get_SA_value_entry(result[0]) + current_pattern_length;
-    result[0]++;
-    length = pattern_length - current_pattern_length + 1; //zvysok
-    unsigned char pattern_test[pattern_length];
-    memcpy(pattern_test, &pattern[current_pattern_length-1], length);
-    pattern_test[length] = '\0';
-
-    unsigned char genome_test[pattern_length];
-
-    memcpy(genome_test, &genome[temp-1], length);
-    genome_test[length] = '\0';
-    printf("1idem alignovat: -%s- a -%s-\n",pattern_test,genome_test);
-      fflush(stdout);
-      
-     if (align(pattern_test,genome_test))
-      return temp-current_pattern_length+1;
-    }
-    return 0;
-   }
-   else
+    //printf("nenasiel som error\n");
+    if (result[1]-result[0]<THRESHOLD)
     {
-      current_pattern_length = result_length - 1;
+     
+     //printf("%d i celkove len %d vyslekov, idem align\n",i,result[1]-result[0]);
+     while (result[0]!=result[1])
+     {
+      //printf("current_pattern_start je %d\n",current_pattern_start);
+      temp = get_SA_value_entry(result[0]) - current_pattern_start;
+      result[0]++;
+      /*unsigned char pattern_test[pattern_length+1];
+      memcpy(pattern_test, &pattern[current_pattern_start], pattern_length-current_pattern_length);
+      pattern_test[pattern_length-current_pattern_length] = '\0';*/
+      k = 0;
+      while (genome[temp]!=pattern[0])
+      {
+       temp++;
+       k++;
+      }
+      //printf("k je %d\n",k);
+      if (k<=max_error+1)
+      {
+       unsigned char genome_test[pattern_length+2];
+       if (k>0)
+       {
+        memcpy(genome_test, &genome[temp], pattern_length+1);
+        genome_test[pattern_length+1] = '\0';
+       }
+       else 
+       {
+        memcpy(genome_test, &genome[temp], pattern_length+1);
+        genome_test[pattern_length+1] = '\0';
+       }
+       //printf("1idem alignovat: -%s- a -%s-\n",pattern,genome_test);
+       fflush(stdout);
+       if (align(pattern,genome_test))
+        return temp;
+      }
+     }
     }
 
-   
+   /*else 
+    printf("vela vysledkov %d %d, zapisujem\n", result[0],result[1]);*/
     
+   /*perfect_results[k++] = i*div_pattern_length;
+   perfect_results[k++] = current_pattern_length;
+   perfect_results[k++] = result[0];
+   perfect_results[k++] = result[1];*/
   }
-  return 0;
- }
 
+  i--;
+ }
 return 0;
 }
+
+
 //procedure for calculating square of dynamic programming matrix
 unsigned int calculate(int i, int j, int k)
 {
@@ -1150,7 +1114,7 @@ unsigned char align(char *p1, char*p2)
  {
   //printf("%d ",matrix[i][p2length]);
   if ((i-matrix[i][p2length])<=max_error){
-    printf("vraciam 1 kvoli %d %d\n",i,matrix[i][p2length]);
+    //printf("vraciam 1 kvoli %d %d\n",i,matrix[i][p2length]);
     return 1;
   }
   }
@@ -1160,19 +1124,19 @@ unsigned char align(char *p1, char*p2)
     //printf("%d ",matrix[p1length][i]);
     if ((i-matrix[p1length][i])<=max_error)
     {
-      printf("vraciam 1 kvoli %d %d\n",i,matrix[p1length][i]);
+      //printf("vraciam 1 kvoli %d %d\n",i,matrix[p1length][i]);
       return 1;
     }
   }
-  //printf("\n");
+  
+  //printf("\nsMUTOK\n");
   return 0;
 }
 
 void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt)
 {
-
-  unsigned int i = 0, a;
-  unsigned int chars_in_entry = 256;
+ unsigned int i = 0, a;
+ unsigned int chars_in_entry = 256;
   
   count_table = create_count_table(bwt);
   unsigned int bitword; unsigned int bit_index;
@@ -1214,14 +1178,6 @@ unsigned int remainder;
  printf("suffix array sample memory: %d bytes\n",((genome_length+sample_SA_size)/sample_SA_size)*sizeof(unsigned int));
  unsigned int*sampleSA = create_sample_SA(suffix_array);
   
-
-
-
-  //A - 00
-//T - 01
-//C - 10
-//G - 11
-
  i = 0;
  while (--total)
  {
@@ -1362,11 +1318,8 @@ if (bit_index) {
  //storing SA_values
  for (a = 0; a<sample_sa_part;a++)
   entries[i++] = sampleSA[sa_iter++];
-  
- //8 pre SA, 6 pre OCC, 17 pre bity, 1 pre info
 
 }
-
 
 //printf("idem zapisat zvysky\n");
 //printf("zacinam zapisovat %d ROOT na poziciu %d\n",bit_iter,i); //8 pre pozicie 0..7
@@ -1375,8 +1328,7 @@ if (bit_index) {
  {
   if (bit_iter*64 >= genome_length)
   {
-    i++;
-    i++;
+    i++;i++;
   }
   else
   {
@@ -1392,10 +1344,8 @@ if (bit_index) {
  //store children info about how many
  entries[i++] = (left_count+32)/32; 
  
- 
  //printf("zacinam zapisovat %d left CHILDREN %d na poziciu %d\n",left_iter, left_count, i); // 9..17
  //store wt_children positions
- 
  bitword = 0;
  bit_index = 0;
  for (a = (i/32)*256; a<genome_length;a++)
@@ -1519,18 +1469,7 @@ if (bit_index) {
  for (a = 0; a<sample_sa_part;a++)
   entries[i++] = sampleSA[sa_iter++];
 
-
-
-
-
-
 free(sampleSA);
-
-/*
-  printf("entries 0az1 su %llu %llu \n",root->bitvector[0],root->bitvector[1]);
-  printf("lefty su %llu %llu \n",left->bitvector[0],left->bitvector[1]);
-  printf("right su %llu %llu %llu\n",right->bitvector[0],right->bitvector[1],right->bitvector[2]);*/
-
 }
 
 
@@ -1549,7 +1488,6 @@ unsigned char search_pattern_in_FM_index_entry(char *pattern, unsigned char curr
  {
   result[1] = genome_length-1;
  }
- 
  while (j>0 && result[0]<result[1])
   {
    alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
@@ -1565,6 +1503,68 @@ unsigned char search_pattern_in_FM_index_entry(char *pattern, unsigned char curr
  
  return j;
 }
+
+//procedure for searching pattern in compressed BWT of FM Index
+void threshold_search_pattern_in_FM_index_entry(char *pattern, unsigned int *result_length, unsigned int *result, unsigned int pattern_length)
+{
+ unsigned int start, end;
+ int j = pattern_length - 1;
+ int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
+
+ result[0] = count_table[alphabet_index];
+ if (alphabet_index!=alphabet_size)
+  result[1] = count_table[alphabet_index + 1]-1;
+ else 
+ {
+  result[1] = genome_length-1;
+ }
+ //printf("\n****rozsah je %d az %d \n",result[0],result[1]);
+ while (j>0 && result[0]<result[1])
+ {
+  alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
+  
+  result[0] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
+  result[1] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
+}
+
+ *result_length = j;
+
+  if (j>0 && result[0]>=result[1]){
+  result[1]--;
+ }
+}
+
+unsigned int extend_seed_in_FM_index_entry(unsigned char*pattern, unsigned int last, unsigned int*result)
+{
+ int j = last;
+ int alphabet_index;
+ unsigned int start,end;
+ /*printf("skoncil som na  = %d, znak %c\n",j, pattern[j]);
+ printf("\n****rozsah je %d az %d \n",result[0],result[1]);*/
+ while (j>0)
+ {
+  alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
+  start = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
+  end = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
+  //printf("**%d**rozsah je %d az %d \n",j,result[0],result[1]);
+  if (start>=end){
+    return j;
+  }
+  else {
+    result[0] = start;
+    result[1] = end;
+  }
+ }
+ /*if (result[0]>=result[1])
+ {
+  result[1]--;
+  return j;
+ }*/
+
+ return j;
+}
+
+
 
 unsigned int wt_rank_entry(unsigned char c, unsigned int position)
 {
@@ -1711,63 +1711,3 @@ unsigned char wt_access_entry(unsigned int entry_index, unsigned short int in_en
   }
 }
 
-
-//procedure for searching pattern in compressed BWT of FM Index
-void threshold_search_pattern_in_FM_index_entry(char *pattern, unsigned int *result_length, unsigned int *result, unsigned int pattern_length)
-{
- unsigned int start, end;
- int j = pattern_length - 1;
- int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
-
- result[0] = count_table[alphabet_index];
- if (alphabet_index!=alphabet_size)
-  result[1] = count_table[alphabet_index + 1]-1;
- else 
- {
-  result[1] = genome_length-1;
- }
- //printf("\n****rozsah je %d az %d \n",result[0],result[1]);
- while (j>0 && result[0]<result[1])
- {
-  alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
-  
-  result[0] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
-  result[1] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
-}
-
- *result_length = j;
-
-  if (j>0 && result[0]>=result[1]){
-  result[1]--;
- }
-}
-
-unsigned int extend_seed_in_FM_index_entry(unsigned char*pattern, unsigned int last, unsigned int*result)
-{
- int j = last;
- int alphabet_index;
- unsigned int start,end;
- /*printf("skoncil som na  = %d, znak %c\n",j, pattern[j]);
- printf("\n****rozsah je %d az %d \n",result[0],result[1]);*/
- while (j>0)
- {
-  alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
-  start = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
-  end = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
-  //printf("**%d**rozsah je %d az %d \n",j,result[0],result[1]);
-  if (start>=end){
-    return j;
-  }
-  else {
-    result[0] = start;
-    result[1] = end;
-  }
- }
- /*if (result[0]>=result[1])
- {
-  result[1]--;
-  return j;
- }*/
-
- return j;
-}
