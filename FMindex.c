@@ -34,7 +34,7 @@ struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *b
  printf("construction of wavelet tree took %lf seconds\n", time_spent);
  fflush(stdout);
 
- printf("suffix array sample memory: %d bytes\n",((genome_length+sample_SA_size)/sample_SA_size)*sizeof(unsigned int));
+ printf("suffix array sample memory: %lu bytes\n",((genome_length+sample_SA_size)/sample_SA_size)*sizeof(unsigned int));
  FM_index_WT->end = find_end(suffix_array);
  FM_index_WT->sampleSA = create_sample_SA(suffix_array);
  free(suffix_array);
@@ -252,7 +252,7 @@ unsigned int last_to_first_WT(unsigned char c, unsigned int bwt_position, struct
 unsigned int *create_count_table(unsigned char *s)
 {
  unsigned int alphabet_size = strlen(alphabet);
- unsigned int *count_table = (unsigned int *) calloc (alphabet_size,sizeof(unsigned int));
+ unsigned int *count_table = (unsigned int *) calloc (alphabet_size+1,sizeof(unsigned int));
  int i = 0;
  int j = 0;
  int k = 0;
@@ -275,6 +275,8 @@ unsigned int *create_count_table(unsigned char *s)
   count_table[i] = count_table[i-1]+j;
   j = k;
  }
+
+ count_table[alphabet_size] = genome_length;
  return count_table;
 }
 
@@ -929,7 +931,6 @@ long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsig
  unsigned int result_length, current_pattern_start;
  char current_error = 0;
  
- unsigned int perfect_results[(max_error+1) * 4];
  //search last part of the pattern
  unsigned char searching_part[pattern_length];
  unsigned int div_pattern_length = (pattern_length+1)/(max_error+1);
@@ -1175,7 +1176,7 @@ unsigned int remainder;
  struct wavelet_tree *root = build_huffman_shaped_WT(bwt,frequencies);
  struct wavelet_tree *left = root->left;
  struct wavelet_tree *right = root->right; 
- printf("suffix array sample memory: %d bytes\n",((genome_length+sample_SA_size)/sample_SA_size)*sizeof(unsigned int));
+ printf("suffix array sample memory: %lu bytes\n",((genome_length+sample_SA_size)/sample_SA_size)*sizeof(unsigned int));
  unsigned int*sampleSA = create_sample_SA(suffix_array);
   
  i = 0;
@@ -1478,29 +1479,39 @@ unsigned char search_pattern_in_FM_index_entry(char *pattern, unsigned char curr
 {
 
  int j = current_pattern_length - 1;
- int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
+ unsigned char alphabet_index = get_alphabet_index(alphabet,pattern[j]);
  unsigned int start,end;
  
  result[0] = count_table[alphabet_index];
- if (alphabet_index!=alphabet_size)
-  result[1] = count_table[alphabet_index + 1]-1;
- else 
- {
-  result[1] = genome_length-1;
- }
+ result[1] = count_table[alphabet_index + 1]-1;
+
+printf("--------------\n");
  while (j>0 && result[0]<result[1])
   {
    alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
-   result[0] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
-   result[1] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
+   
+   printf("res: %d %d\n",result[0], result[1]);
+   unsigned int entry_index1 = (result[0]/256) * 32; //in each entry up to 256 chars
+   unsigned int in_entry_index1 = result[0]%256; //v danom entry
+
+   unsigned int entry_index2 = (result[1]/256) * 32; //in each entry up to 256 chars
+   unsigned int in_entry_index2 = result[1]%256; //v danom entry
+
+  __builtin_prefetch (&entries[entry_index1], 0, 1);
+  __builtin_prefetch (&entries[entry_index2], 0, 1);
+
+   result[0] = count_table[alphabet_index] + wt_rank_entry(alphabet_index, result[0], entry_index1, in_entry_index1);
+   result[1] = count_table[alphabet_index] + wt_rank_entry(alphabet_index, result[1], entry_index2, in_entry_index2);
   }
 
+
+printf("res: %d %d\n",result[0], result[1]);
  if (result[0]>=result[1])
  {
   result[1]--;
   return j;
  }
- 
+  
  return j;
 }
 
@@ -1523,8 +1534,8 @@ void threshold_search_pattern_in_FM_index_entry(char *pattern, unsigned int *res
  {
   alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
   
-  result[0] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
-  result[1] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
+  /*result[0] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
+  result[1] = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);*/
 }
 
  *result_length = j;
@@ -1534,43 +1545,10 @@ void threshold_search_pattern_in_FM_index_entry(char *pattern, unsigned int *res
  }
 }
 
-unsigned int extend_seed_in_FM_index_entry(unsigned char*pattern, unsigned int last, unsigned int*result)
-{
- int j = last;
- int alphabet_index;
- unsigned int start,end;
- /*printf("skoncil som na  = %d, znak %c\n",j, pattern[j]);
- printf("\n****rozsah je %d az %d \n",result[0],result[1]);*/
- while (j>0)
- {
-  alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
-  start = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[0]);
-  end = count_table[alphabet_index] + wt_rank_entry(pattern[j], result[1]);
-  //printf("**%d**rozsah je %d az %d \n",j,result[0],result[1]);
-  if (start>=end){
-    return j;
-  }
-  else {
-    result[0] = start;
-    result[1] = end;
-  }
- }
- /*if (result[0]>=result[1])
- {
-  result[1]--;
-  return j;
- }*/
 
- return j;
-}
-
-
-
-unsigned int wt_rank_entry(unsigned char c, unsigned int position)
+unsigned int wt_rank_entry(unsigned char c, unsigned int position, unsigned int entry_index, unsigned int in_entry_index)
 {
  unsigned int i;
- unsigned int entry_index = (position/256) * 32; //in each entry up to 256 chars
- unsigned int in_entry_index = position%256; //v danom entry
  unsigned int count = 0;
  unsigned int result = 0;
  unsigned int a = in_entry_index;
@@ -1585,7 +1563,7 @@ unsigned int wt_rank_entry(unsigned char c, unsigned int position)
   if (remainder)
    count = count + __builtin_popcount(entries[entry_index+i]>>(32-remainder));
 
- if (c == 'A' || c == 'T')
+ if (c == 0 || c == 3)
  {
   //bolo nutne spocitat nuly, preto invertujem
   count = in_entry_index - count;
@@ -1598,10 +1576,10 @@ unsigned int wt_rank_entry(unsigned char c, unsigned int position)
      remainder = remainder - 32;
     }
   
-  if (remainder)
-   result = result + __builtin_popcount(entries[entry_index+9+i]>>(32-remainder));
+   if (remainder)
+    result = result + __builtin_popcount(entries[entry_index+9+i]>>(32-remainder));
 
-  if (c=='A')
+  if (c==0)
    return (count - result + entries[entry_index + 20]);
   
   else
@@ -1617,10 +1595,11 @@ unsigned int wt_rank_entry(unsigned char c, unsigned int position)
    result = result + __builtin_popcount(entries[entry_index+9+a+i]);
    remainder = remainder - 32;
   }
+
   if (remainder)
    result = result + __builtin_popcount(entries[entry_index+9+a+i]>>(32-remainder));
 
-  if (c=='G')
+ if (c==2)
    return (count - result + entries[entry_index + 22]);
 
   else
@@ -1639,13 +1618,17 @@ unsigned int get_SA_value_entry(unsigned int bwt_position)
  {
   entry_index = (bwt_position/256) * 32;
   in_entry_index = bwt_position%256;
+
+  __builtin_prefetch (&entries[entry_index], 0, 3);
   c = wt_access_entry(entry_index, in_entry_index);
   character = get_alphabet_index(alphabet,c);
-  bwt_position = count_table[character] + wt_rank_entry(c, bwt_position);
+  bwt_position = count_table[character] + wt_rank_entry(character, bwt_position, entry_index, in_entry_index);
+  printf("count %d, c %d pos %d\n",count,character, bwt_position);
   count++;
 
  }
-
+ 
+ 
  entry_index = (bwt_position/256) * 32;
  in_entry_index = bwt_position%256;
  unsigned int result = entries[entry_index + 24 + in_entry_index/32] + count;
