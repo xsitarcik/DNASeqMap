@@ -87,3 +87,4 @@ unsigned char* order_new_alphabet(unsigned char*new_alphabet,unsigned char*alpha
 unsigned char* huffman_decode_without_RLE(unsigned char*bitvector, struct huffman_node*huffman_tree,unsigned int string_length);
 unsigned char* huffman_decode_with_RLE(unsigned char*bitvector, struct huffman_node*huffman_tree,unsigned int string_length,unsigned char flag_runs);
 void free_huffman_tree(struct huffman_node *node);
+unsigned char * naive_compress(unsigned char *genome);

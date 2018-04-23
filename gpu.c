@@ -8,8 +8,9 @@
 #define MEM_SIZE 128
 #define MAX_SOURCE_SIZE 0x100000
 #define DEVICE_GROUP_SIZE 256
+#define NUM_OF_READS_PER_WARP 4 
 
-void resize_array(int** orig, int newSize) {
+/*void resize_array(int** orig, int newSize) {
 	printf("Resizing to: %lu\n", sizeof(*orig) * newSize);
 	printf("before size: %lu\n",sizeof(*orig));
 	int *temp = realloc(*orig, sizeof(*orig) * newSize);
@@ -20,7 +21,7 @@ void resize_array(int** orig, int newSize) {
 	} else {
 		*orig = temp;
 	}
-}
+}*/
 
 void error_handler(char err[], int code) {
 	if(code != CL_SUCCESS) {
@@ -31,62 +32,29 @@ void error_handler(char err[], int code) {
 
 int main(int argc, char * argv[]) {
 	int ret;
-	int orig_inputSize = atoi(argv[1]);
-	int inputSize,residue;
-	printf("Specified input array will have %d items\n", orig_inputSize);
-	printf("The program will sum the integers in the range [0, %d)\n", orig_inputSize);
-	printf("==============\n");
+ 	int ALPHABET_SIZE = 4;
+ 	int PATTERN_LENGTH = 64;
+
+	unsigned int * count_table = (unsigned int *)malloc(sizeof(unsigned int) *  (ALPHABET_SIZE+1));
+	count_table[0] = 4;
+	count_table[1] = 5;
+	count_table[2] = 6;
+	count_table[3] = 7;
+	count_table[4] = 9;
 
 	/* create input data */
-	int* input = (int *)malloc(sizeof(*input) * orig_inputSize);
-	for(int i = 0; i < orig_inputSize; i++) {
-		input[i] = 1;
-	}
+	int orig_inputSize = 1024;
+	int multiplier = 4;
 
-	printf("device group size je %d\n",DEVICE_GROUP_SIZE);
-	int sizeDiff = orig_inputSize - DEVICE_GROUP_SIZE;
-	int multiplier = 1;
-	
-	if(sizeDiff < 0) {
-		resize_array(&input, DEVICE_GROUP_SIZE);
-	}
-	else if(sizeDiff > 0) {
-		multiplier = ((orig_inputSize % (DEVICE_GROUP_SIZE*2)) == 0) ? (orig_inputSize / (DEVICE_GROUP_SIZE*2)): (orig_inputSize / (DEVICE_GROUP_SIZE*2)) + 1;
-			/* read results from output buffer */
-		multiplier = multiplier*2;
-		resize_array(&input, multiplier * DEVICE_GROUP_SIZE);
-		//multiplier = multiplier/2;
-	}
+	char* input = (char *)malloc(sizeof(char) *  1500);
+	input = "TCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCATCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCA";
 
-	for(int i = 0; i < abs(sizeDiff); i++) {
-		input[orig_inputSize + i] = 0;
-	}
+	int inputSize = 1024;
 
 	
 
-	printf("mulitplier %d * device group %d = %d\n",multiplier,DEVICE_GROUP_SIZE, multiplier*DEVICE_GROUP_SIZE);
-	fflush(stdout);
-	inputSize = multiplier * DEVICE_GROUP_SIZE;
 
-	printf("multiplier je %d\n",multiplier);
-
-	if (multiplier%2)
-		residue = DEVICE_GROUP_SIZE - (inputSize-orig_inputSize);
-	else
-		residue = 0;
-	printf("residue je %d\n",residue);
-
-	multiplier = (multiplier)/2;
-
-
-	printf("NICE\n");
-	fflush(stdout);
-	/* define platform */
-	cl_platform_id platformID;
-	ret = clGetPlatformIDs(1, &platformID, NULL);
-	error_handler("Get platform error", ret);	
-
-	printf("NICE\n");
+	printf("%d %d %d %d\n",count_table[0],count_table[1],count_table[2],count_table[3]);
 	fflush(stdout);
 	/* define device */
 	cl_device_id deviceID;
@@ -99,8 +67,6 @@ int main(int argc, char * argv[]) {
 	ret = clGetDeviceInfo(deviceID, CL_DEVICE_NAME, sizeof(deviceName), deviceName, NULL);
 	printf("Connecting to %s %s...\n", vendorName, deviceName);
 
-	printf("NICE\n");
-	fflush(stdout);
 	/* define context */
 	cl_context context;
 	context = clCreateContext(NULL, 1, &deviceID, NULL, NULL, &ret);
@@ -113,9 +79,22 @@ int main(int argc, char * argv[]) {
 
 	/* create memory objects */
 	cl_mem inputMemObj;
-	inputMemObj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(int)*inputSize, NULL, &ret);
+	inputMemObj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(char)*inputSize, NULL, &ret);
 	error_handler("Create input buffer failed", ret);
-	ret = clEnqueueWriteBuffer(commandQueue, inputMemObj, CL_TRUE, 0, sizeof(int)*inputSize, (const void*)input, 0, NULL, NULL);
+	ret = clEnqueueWriteBuffer(commandQueue, inputMemObj, CL_TRUE, 0, sizeof(char)*inputSize, (const void*)input, 0, NULL, NULL);
+	error_handler("Write to input buffer failed", ret);
+
+	/* create memory objects */
+	cl_mem inputMemObj_count_table;
+	inputMemObj_count_table = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned int)*(ALPHABET_SIZE+1), NULL, &ret);
+	error_handler("Create input buffer failed", ret);
+	ret = clEnqueueWriteBuffer(commandQueue, inputMemObj_count_table, CL_TRUE, 0, sizeof(unsigned int)*(ALPHABET_SIZE+1), (const void*)count_table, 0, NULL, NULL);
+	error_handler("Write to input buffer failed", ret);
+
+	cl_mem inputMemObj_fm_index;
+	inputMemObj_fm_index = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned int)*(ALPHABET_SIZE+1), NULL, &ret);
+	error_handler("Create input buffer failed", ret);
+	ret = clEnqueueWriteBuffer(commandQueue, inputMemObj_fm_index, CL_TRUE, 0, sizeof(unsigned int)*(ALPHABET_SIZE+1), (void*)count_table, 0, NULL, NULL);
 	error_handler("Write to input buffer failed", ret);
 
 	// output need only be an array of inputSize / DEVICE_GROUP_SIZE long
@@ -138,8 +117,8 @@ int main(int argc, char * argv[]) {
 	sourceStr = (char*)malloc(MAX_SOURCE_SIZE);
 	sourceSize = fread(sourceStr, 1, MAX_SOURCE_SIZE, fp);
 	fclose(fp);
-	
-	printf("MERDE\n");
+
+
 	/* create program object */
 	cl_program program = clCreateProgramWithSource(context, 1, (const char**)&sourceStr, (const size_t*)&sourceSize, &ret);	
 	error_handler("create program failure", ret);
@@ -161,29 +140,55 @@ int main(int argc, char * argv[]) {
 	error_handler("Set arg 1 failure", ret);
 	ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&outputMemObj);
 	error_handler("Set arg 2 failure", ret);
-	ret = clSetKernelArg(kernel, 2, sizeof(int), (void *)&inputSize);
+	ret = clSetKernelArg(kernel, 2, sizeof(int), (void *)&PATTERN_LENGTH);
 	error_handler("Set arg 3 failure", ret);
-	ret = clSetKernelArg(kernel, 3, sizeof(int) * DEVICE_GROUP_SIZE, NULL);
+	ret = clSetKernelArg(kernel, 3, sizeof(unsigned int) * 2 * NUM_OF_READS_PER_WARP, NULL);
 	error_handler("Set arg 4 failure", ret);
+	ret = clSetKernelArg(kernel, 4, sizeof(cl_mem), (void *)&inputMemObj_count_table);
+	error_handler("Set arg 5 failure", ret);
+	ret = clSetKernelArg(kernel, 5, sizeof(unsigned int) * 5, NULL);
+	error_handler("Set arg 6 failure", ret);
+	ret = clSetKernelArg(kernel, 6, sizeof(char) * NUM_OF_READS_PER_WARP * PATTERN_LENGTH, NULL);
+	error_handler("Set arg 7 failure", ret);
+	ret = clSetKernelArg(kernel, 7, sizeof(unsigned int) * 4 * NUM_OF_READS_PER_WARP, NULL); //indexes
+	error_handler("Set arg 9 failure", ret);
+	ret = clSetKernelArg(kernel, 8, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //fm_index entry
+	error_handler("Set arg 10 failure", ret);
+	ret = clSetKernelArg(kernel, 9, sizeof(unsigned int) * DEVICE_GROUP_SIZE * 2, NULL); //count_table_results
+	error_handler("Set arg 11 failure", ret);
+	ret = clSetKernelArg(kernel, 10, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //bitcounts
+	error_handler("Set arg 12 failure", ret);
+	ret = clSetKernelArg(kernel, 11, sizeof(cl_mem), (void *)&inputMemObj_fm_index);
+	error_handler("Set arg 5 failure", ret);
+
 
 	/* enqueue and execute */
-	const size_t globalWorkSize = inputSize/2;
-	const size_t localWorkSize = DEVICE_GROUP_SIZE;
+	const size_t globalWorkSize = 1024/2;
+	const size_t localWorkSize = 256;
 	printf("global %d, local %d\n",globalWorkSize, localWorkSize);
 	ret = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, &globalWorkSize, &localWorkSize, 0, NULL, NULL);
 	error_handler("Enqueue/execute failure", ret);
 	
 
-	clock_t begin = clock();
+	//clock_t begin = clock();
 
 	int * results = (int*) malloc(sizeof(int)*multiplier);
-	ret = clEnqueueReadBuffer(commandQueue, outputMemObj, CL_TRUE, 0, sizeof(int)*multiplier, results, 0, NULL, NULL);
-	error_handler("Read output buffer fail", ret);
+
 	ret = clEnqueueReadBuffer(commandQueue, outputMemObj, CL_TRUE, 0, sizeof(int)*multiplier, results, 0, NULL, NULL);
 	error_handler("Read output buffer fail", ret);
 
-	//je nutne spocitat residue
 	int sum = 0;
+	//printf("multiplier je %d\n",multiplier);
+	for(int i = 0; i < multiplier; i++) {
+		printf("wat %d\n",results[i]);
+		sum += results[i];
+	}
+
+	/*ret = clEnqueueReadBuffer(commandQueue, outputMemObj, CL_TRUE, 0, sizeof(int)*multiplier, results, 0, NULL, NULL);
+	error_handler("Read output buffer fail", ret);*/
+
+	//je nutne spocitat residue
+	/*int sum = 0;
 	for (int i = orig_inputSize-residue;i<orig_inputSize;i++){
 		printf("%d\n", input[i]);
 		sum += input[i]; 
@@ -216,7 +221,7 @@ int main(int argc, char * argv[]) {
  printf("construction of wavelet tree took %lf seconds\n", time_spent2);
  printf("The sum of the array is: %d\n", sum);
  fflush(stdout);
-
+*/
 
 	/* release */
 	ret = clReleaseKernel(kernel);
@@ -226,7 +231,9 @@ int main(int argc, char * argv[]) {
 	ret = clReleaseCommandQueue(commandQueue);
 	ret = clReleaseContext(context);	
 
-	free(input);
+	printf("MEKO\n");
+	fflush(stdout);
+	//free(input);
 	free(results);
 
 	exit(EXIT_SUCCESS);

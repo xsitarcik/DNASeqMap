@@ -26,11 +26,11 @@ __kernel void sum(
 	//const int i = workgroupID*blockDim+tid;
 	
 	
-	char warp_index = tid/32;
-	char in_warp_index = tid%32;
-	unsigned char iterator = readLength/2 - 1 + warp_index*32;
+	/*char warp_index = tid/32;
+	char in_warp_index = tid%32;*/
+	unsigned char iterator = readLength/2 - 1;
 
-	int readIndex = readLength * warp_index + workgroupID*8*readLength + in_warp_index + 32;
+	int readIndex = workgroupID*readLength + tid + 32;
 
 	 /*If n is a power of 2, (i/n) is equivalent to (i ≫ log2(n)) 
 	 and (i % n) is equivalent to (i & (n-1)).*/
@@ -58,18 +58,19 @@ __kernel void sum(
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 
+	count_table_results[tid] = count_table[alphabet_indexes[tid]];
+
+	barrier(CLK_LOCAL_MEM_FENCE);
+
 	if (tid == iterator)
 	{
-		count_table_results[tid] = count_table[alphabet_indexes[tid]];
 		count_table_results[blockDim+tid] = count_table[alphabet_indexes[tid] + 1] - 1;
 
 	}
 	else
 	{
-		count_table_results[tid] = count_table[alphabet_indexes[tid]];
 		count_table_results[blockDim+tid] = count_table[alphabet_indexes[tid]];
 	}
-
 
 	
 	//wait to calc counts
@@ -78,25 +79,50 @@ __kernel void sum(
 
 	//iterator--;
 	
-	while(iterator>warp_index*32 && count_table_results[iterator] < count_table_results[iterator+blockDim])
+	while(iterator>0 && count_table_results[iterator] < count_table_results[iterator+blockDim])
 	{
 
 
-		if (in_warp_index == 0)
+		if (tid<4)
 		{
-		 indexes[warp_index*4] = (count_table_results[iterator]/256) * 32;	//entry index
+			if (tid == 0)
+			{
+			 indexes[0] = (count_table_results[iterator]>>8) * 32;	//entry index
+			}
+			else if (tid == 1)
+			{
+			 indexes[1] = count_table_results[iterator] & 255;	//in_entry_index
+			}
+			else if (tid == 2)
+			{
+			 indexes[2] = (count_table_results[blockDim+iterator]>>8) * 32;	//entry index
+			}
+			else
+			{	
+			 indexes[3] = count_table_results[blockDim+iterator]&255;	//in_entry_index
+			}
 		}
-		else if (in_warp_index == 1)
+
+		barrier(CLK_LOCAL_MEM_FENCE);
+
+		if (tid<4)
 		{
-		 indexes[warp_index*4 + 1] = count_table_results[iterator]%256;	//in_entry_index
-		}
-		else if (in_warp_index == 2)
-		{
-		 indexes[warp_index*4 + 2] = (count_table_results[256+iterator]/256) * 32;	//entry index
-		}
-		else if (in_warp_index == 3)
-		{	
-		 indexes[warp_index*4 + 3] = count_table_results[256+iterator]%256;	//in_entry_index
+			if (tid == 0)
+			{
+			 indexes[4] = indexes[1] >> 5;	//entry index
+			}
+			else if (tid == 1)
+			{
+			 indexes[5] = indexes[1] & 31;	//in_entry_index
+			}
+			else if (tid == 2)
+			{
+			 indexes[6] = indexes[3] >> 5;	//entry_index
+			}
+			else if (tid == 3)
+			{	
+			 indexes[7] = indexes[3] & 31;	//in_entry_index
+			}
 		}
 
 
@@ -105,7 +131,7 @@ __kernel void sum(
 		barrier(CLK_LOCAL_MEM_FENCE);
 
 		//loading fm index entry
-		fm_index_entry[tid] = fm_index_input[ indexes[4*warp_index] + in_warp_index];
+		fm_index_entry[tid] = fm_index_input[ indexes[0] + tid];
 
 
 		barrier(CLK_LOCAL_MEM_FENCE);
@@ -113,30 +139,28 @@ __kernel void sum(
 
 		////pocitam dalsi rozsah, teraz spodna hranica
 		//max prvych 8 threadov z 32
-		if (in_warp_index<8)
+		if (tid<8)
 		{
-			if (in_warp_index<indexes[warp_index*4 + 1]/32)
+			if (tid<indexes[4])
 			{	
 				bitcounts[tid] = popcount(fm_index_entry[tid]);
 			}
 			
-			else if (in_warp_index == indexes[warp_index*4 + 1]/32)
+			else if (tid == indexes[4])
 			{	
-				if (indexes[warp_index*4 + 1]%32)
-					bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - (indexes[warp_index*4 + 1]%32))); 
+				if (indexes[5])
+					bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - indexes[5])); 
 				else
 					bitcounts[tid] = 0;
-				
-				//printf("je %d hodnot, pocita akurat %d vlakno so zvyskm, vrati %d, shift %d,  vnutri %d, po shifte %lu\n",indexes[warp_index*4 + 1], in_warp_index, bitcounts[tid], (32 - (indexes[warp_index*4 + 1]%32)),indexes[warp_index*4 + 1]%32, fm_index_entry[tid]>>32);
 			}
 		}
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 		//1 z 32
-		if (in_warp_index == 0)
+		if (tid == 0)
 		{	
-			for (a=1;a<=indexes[warp_index*4 + 1]/32;a++)
-				bitcounts[tid] += bitcounts[tid + a];
+			for (a=1;a<=indexes[4];a++)
+				bitcounts[tid] += bitcounts[a];
 		}
 
 
@@ -145,9 +169,9 @@ __kernel void sum(
 		//1 z 32
 		if (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3)
 		{
-			if (in_warp_index == 0)
+			if (tid == 0)
 			{	
-				bitcounts[tid] = indexes[warp_index*4 + 1] - bitcounts[warp_index*32];
+				bitcounts[tid] = indexes[1] - bitcounts[tid];
 			}
 		}
 		
@@ -155,36 +179,36 @@ __kernel void sum(
 		
 		//max 8 threadov, 9-17 pozicia
 		//spocitat 'vlavo"
-		if (in_warp_index >  8 && (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3))
+		if (tid >  8 && (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3))
 		{
-			if (in_warp_index<(9+bitcounts[warp_index*32]/32))
+			if (tid<((bitcounts[0]/32) + 9))
 			{
 				bitcounts[tid] = popcount(fm_index_entry[tid]);
 			}
 		
-			else if (in_warp_index == (9+bitcounts[warp_index*32]/32))
+			else if (tid == (9+bitcounts[0]/32))
 			{	
-				if (bitcounts[warp_index*32]%32)
-					bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - bitcounts[warp_index*32]%32)); 
+				if (bitcounts[0]%32)
+					bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - bitcounts[0]%32)); 
 				else
 					bitcounts[tid] = 0;
 			}
 		}
 
 		//spocitat "vpravo"
-		if (in_warp_index >  8 && (alphabet_indexes[iterator] == 1 || alphabet_indexes[iterator] == 2))
+		if (tid >  8 && (alphabet_indexes[iterator] == 1 || alphabet_indexes[iterator] == 2))
 		{
-			a = fm_index_entry[warp_index*32 + 8];
+			a = fm_index_entry[8];
 
-			if (in_warp_index<(9+bitcounts[warp_index*32]/32))
+			if (tid<(9+bitcounts[0]/32))
 			{
 				bitcounts[tid] = popcount(fm_index_entry[tid + a]);
 			}
 		
-			else if (in_warp_index == (9+bitcounts[warp_index*32]/32))
+			else if (tid == (9+bitcounts[0]/32))
 			{	
-				if (bitcounts[warp_index*32]%32){
-					bitcounts[tid] = popcount((fm_index_entry[tid + a]) >> (32 - bitcounts[warp_index*32]%32)); 
+				if (bitcounts[0]%32){
+					bitcounts[tid] = popcount((fm_index_entry[tid + a]) >> (32 - bitcounts[0]%32)); 
 
 				}
 				else 
@@ -195,18 +219,18 @@ __kernel void sum(
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 
-		if (in_warp_index == 9)
+		if (tid == 9)
 		{
 			if (alphabet_indexes[iterator] == 3 || alphabet_indexes[iterator] == 1)
 			{
-				for (a=1;a<=bitcounts[warp_index*32]/32;a++)
+				for (a=1;a<=bitcounts[0]/32;a++)
 					bitcounts[tid] += bitcounts[tid + a];
 			}	
 			else
 			{
-				for (a=1;a<=bitcounts[warp_index*32]/32;a++)
+				for (a=1;a<=bitcounts[0]/32;a++)
 					bitcounts[tid] += bitcounts[tid + a];
-				bitcounts[tid] = bitcounts[warp_index*32] - bitcounts[tid];
+				bitcounts[tid] = bitcounts[0] - bitcounts[tid];
 
 			}
 		}
@@ -214,7 +238,7 @@ __kernel void sum(
 		
 
 		//add occ_counter in fm index entry
-		if (in_warp_index == 0)
+		else if (tid == 0)
 		{
 			if (alphabet_indexes[iterator] == 0)
 				count_table_results[iterator] += fm_index_entry[20];
@@ -228,7 +252,7 @@ __kernel void sum(
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 
-		if (in_warp_index == 9){
+		if (tid == 9){
 			//printf("pred %d a scita sa %d\n",count_table_results[iterator], bitcounts[tid]);
 			count_table_results[iterator] += bitcounts[tid]; //fm_index_occ is already loaded
 		}
@@ -239,19 +263,19 @@ __kernel void sum(
 		////pocitam dalsi rozsah, teraz horna hranicass
 		//loading fm index entry
 		barrier(CLK_LOCAL_MEM_FENCE);
-		fm_index_entry[tid] = fm_index_input[ indexes[4*warp_index + 2] + in_warp_index];
+		fm_index_entry[tid] = fm_index_input[ indexes[2] + tid];
 		barrier(CLK_LOCAL_MEM_FENCE);
 		
 
-		if (in_warp_index<indexes[warp_index*4 + 3]/32)
+		if (tid<indexes[3]/32)
 		{
 			bitcounts[tid] = popcount(fm_index_entry[tid]);
 		}
 		
-		else if (in_warp_index == indexes[warp_index*4 + 3]/32)
+		else if (tid == indexes[3]/32)
 		{
-			if (indexes[warp_index*4 + 3]%32)
-				bitcounts[tid] = popcount((fm_index_entry[tid]) >> (32 - indexes[warp_index*4 + 3]%32)); 
+			if (indexes[3]%32)
+				bitcounts[tid] = popcount((fm_index_entry[tid]) >> (32 - indexes[3]%32)); 
 			else
 				bitcounts[tid] = 0;
 		}
@@ -260,10 +284,10 @@ __kernel void sum(
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 		//1 z 32
-		if (in_warp_index == 0)
+		if (tid == 0)
 		{
-			for (a=1;a<=indexes[warp_index*4 + 3]/32;a++)
-				bitcounts[tid] += bitcounts[tid + a];
+			for (a=1;a<=indexes[3]/32;a++)
+				bitcounts[tid] += bitcounts[a];
 		}
 
 		barrier(CLK_LOCAL_MEM_FENCE);
@@ -271,9 +295,9 @@ __kernel void sum(
 		//1 z 32
 		if (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3)
 		{
-			if (in_warp_index == 0)
+			if (tid == 0)
 			{
-				bitcounts[tid] = indexes[warp_index*4 + 3] - bitcounts[warp_index*32];
+				bitcounts[tid] = indexes[3] - bitcounts[0];
 			}
 		}
 		
@@ -283,18 +307,18 @@ __kernel void sum(
 
 		//max 8 threadov, 9-17 pozicia
 		//spocitat 'vlavo"
-		if (in_warp_index >  8 && (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3))
+		if (tid >  8 && (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3))
 		{
 
-			if (in_warp_index<(9+bitcounts[warp_index*32]/32))
+			if (tid<(9+bitcounts[0]/32))
 			{
 				bitcounts[tid] = popcount(fm_index_entry[tid]);
 			}
 		
-			else if (in_warp_index == (9+bitcounts[warp_index*32]/32))
+			else if (tid == (9+bitcounts[0]/32))
 			{	
-				if (bitcounts[warp_index*32]%32){
-					bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - bitcounts[warp_index*32]%32)); 
+				if (bitcounts[0]%32){
+					bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - bitcounts[0]%32)); 
 				}
 				else
 					bitcounts[tid] = 0;
@@ -302,20 +326,20 @@ __kernel void sum(
 		}
 
 		//spocitat "vpravo"
-		if (in_warp_index >  8 && (alphabet_indexes[iterator] == 1 || alphabet_indexes[iterator] == 2))
+		if (tid >  8 && (alphabet_indexes[iterator] == 1 || alphabet_indexes[iterator] == 2))
 		{
 
-			a = fm_index_entry[warp_index*32 + 8];
+			a = fm_index_entry[8];
 
-			if (in_warp_index<(9+bitcounts[warp_index*32]/32))
+			if (tid<(9+bitcounts[0]/32))
 			{
 				bitcounts[tid] = popcount(fm_index_entry[tid + a]);
 			}
 		
-			else if (in_warp_index == (9+bitcounts[warp_index*32]/32))
+			else if (tid == (9+bitcounts[0]/32))
 			{	
-				if (bitcounts[warp_index*32]%32){
-					bitcounts[tid] = popcount((fm_index_entry[tid + a]) >> (32 - bitcounts[warp_index*32]%32)); 
+				if (bitcounts[0]%32){
+					bitcounts[tid] = popcount((fm_index_entry[tid + a]) >> (32 - bitcounts[0]%32)); 
 				}
 				else 
 					bitcounts[tid] = 0;
@@ -326,24 +350,24 @@ __kernel void sum(
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 
-		if (in_warp_index == 9)
+		if (tid == 9)
 		{
 			if (alphabet_indexes[iterator] == 3 || alphabet_indexes[iterator] == 1)
 			{
-				for (a=1;a<=bitcounts[warp_index*32]/32;a++)
+				for (a=1;a<=bitcounts[0]/32;a++)
 					bitcounts[tid] += bitcounts[tid + a];
 			}	
 			else
 			{
-				for (a=1;a<=bitcounts[warp_index*32]/32;a++)
+				for (a=1;a<=bitcounts[0]/32;a++)
 					bitcounts[tid] += bitcounts[tid + a];
-				bitcounts[tid] = bitcounts[warp_index*32] - bitcounts[tid];
+				bitcounts[tid] = bitcounts[0] - bitcounts[tid];
 			}
 		}
 
 
 		//add occ_counter in fm index entry
-		if (in_warp_index == 0)
+		if (tid == 0)
 		{
 			if (alphabet_indexes[iterator] == 0)
 				count_table_results[iterator+blockDim] += fm_index_entry[20];
@@ -358,7 +382,7 @@ __kernel void sum(
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 
-		if (in_warp_index == 9)
+		if (tid == 9)
 		{
 			count_table_results[iterator+blockDim] += bitcounts[tid]; //fm_index_occ is already loaded
 		}
@@ -382,15 +406,15 @@ __kernel void sum(
 		while (count_table_results[iterator]%32 != 0)
 		{
 
-			if (in_warp_index == 1)
-				indexes[warp_index*2] = (count_table_results[iterator]/256)*32;
-			else if (in_warp_index == 2)
-				indexes[warp_index*2 + 1] = count_table_results[iterator]%256;
+			if (tid == 1)
+				indexes[0] = (count_table_results[iterator]/256)*32;
+			else if (tid == 2)
+				indexes[1] = count_table_results[iterator]%256;
 
 
 			barrier(CLK_LOCAL_MEM_FENCE);
 			
-			fm_index_entry[tid] = fm_index_input[ indexes[2*warp_index] + in_warp_index];
+			fm_index_entry[tid] = fm_index_input[ indexes[0] + tid];
 			
 			barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -401,37 +425,37 @@ __kernel void sum(
 			//count 0 or 1 up to indexes[2*warp_index+1]
 			//find 
 
-			if (in_warp_index<8)
+			if (tid<8)
 			{
-				if (in_warp_index<indexes[warp_index*2 + 1]/32)
+				if (tid<indexes[1]/32)
 				{	
 					bitcounts[tid] = popcount(fm_index_entry[tid]);
 				}
 				
-				else if (in_warp_index == indexes[warp_index*2 + 1]/32)
+				else if (tid == indexes[1]/32)
 				{	
-					if (indexes[warp_index*2 + 1]%32)
-						bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - (indexes[warp_index*2 + 1]%32))); 
+					if (indexes[1]%32)
+						bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - (indexes[1]%32))); 
 					else
 						bitcounts[tid] = 0;
 				}
 			}
 
-			else if (in_warp_index == 8)
-				bitcounts[tid] = 31 - indexes[2*warp_index+1]%32;
-			else if (in_warp_index == 9)
-				bitcounts[tid] = indexes[2*warp_index+1]/32;
+			else if (tid == 8)
+				bitcounts[tid] = 31 - indexes[1]%32;
+			else if (tid == 9)
+				bitcounts[tid] = indexes[1]/32;
 
 
 			barrier(CLK_LOCAL_MEM_FENCE);
 			//counting together
-			if (in_warp_index == 0)
+			if (tid == 0)
 			{
-				for (a=1;a<=indexes[warp_index*2 + 1]/32;a++)
-					bitcounts[tid] += bitcounts[tid + a];
+				for (a=1;a<=indexes[1]/32;a++)
+					bitcounts[tid] += bitcounts[a];
 			}
 
-			else if (in_warp_index == 8) // v 8 ulozim aky je bit
+			else if (tid == 8) // v 8 ulozim aky je bit
 			{
 				bitcounts[tid] = (fm_index_entry[bitcounts[tid+1]] >> bitcounts[tid]) & 1;
 			}
@@ -441,14 +465,14 @@ __kernel void sum(
 			//v 1.pozicii je uchovana suma 0
 			//v 2. pozicii je suma %32
 			//v 3.pozicii je suma/32
-			if (in_warp_index == 1)
+			if (tid == 1)
 			{ 
-				if (bitcounts[warp_index*32 + 8])
+				if (bitcounts[8])
 				{
-					bitcounts[tid] = bitcounts[warp_index*32];
+					bitcounts[tid] = bitcounts[0];
 				}
 				else
-					bitcounts[tid] = indexes[warp_index*2 + 1] - bitcounts[warp_index*32];
+					bitcounts[tid] = indexes[1] - bitcounts[0];
 			}
 
 
@@ -457,25 +481,25 @@ __kernel void sum(
 
 			barrier(CLK_LOCAL_MEM_FENCE);
 
-			if (in_warp_index == 2)
-				bitcounts[tid] = 31  - bitcounts[warp_index*32+1]%32;
-			else if (in_warp_index == 3)
-				bitcounts[tid] = bitcounts[warp_index*32+1]/32;
+			if (tid == 2)
+				bitcounts[tid] = 31  - bitcounts[1]%32;
+			else if (tid == 3)
+				bitcounts[tid] = bitcounts[1]/32;
 			
 			barrier(CLK_LOCAL_MEM_FENCE);
 
-			if (in_warp_index == 9 )
+			if (tid == 9 )
 			{
-				if (bitcounts[warp_index*32+8])
+				if (bitcounts[8])
 				{
-					if (((fm_index_entry[bitcounts[warp_index*32 + 3] + fm_index_entry[warp_index*32 + 8] + 9]) >> bitcounts[warp_index*32 + 2]) & 1)
+					if (((fm_index_entry[bitcounts[3] + fm_index_entry[8] + 9]) >> bitcounts[2]) & 1)
 						alphabet_indexes[iterator] = 1;
 					else
 						alphabet_indexes[iterator] = 2;
 				}
 				else
 				{
-					if (((fm_index_entry[bitcounts[warp_index*32 + 3] + 9]) >> bitcounts[warp_index*32 + 2]) & 1)
+					if (((fm_index_entry[bitcounts[3] + 9]) >> bitcounts[2]) & 1)
 						alphabet_indexes[iterator] = 3;
 					else
 						alphabet_indexes[iterator] = 0;
@@ -490,9 +514,9 @@ __kernel void sum(
 			//1 z 32
 			if (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3)
 			{
-				if (in_warp_index == 0)
+				if (tid == 0)
 				{
-					bitcounts[tid] = indexes[warp_index*2 + 1] - bitcounts[warp_index*32];
+					bitcounts[tid] = indexes[1] - bitcounts[0];
 				}
 			}
 			
@@ -502,18 +526,18 @@ __kernel void sum(
 
 			//max 8 threadov, 9-17 pozicia
 			//spocitat 'vlavo"
-			if (in_warp_index >  8 && (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3))
+			if (tid >  8 && (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3))
 			{
 
-				if (in_warp_index<(9+bitcounts[warp_index*32]/32))
+				if (tid<(9+bitcounts[0]/32))
 				{
 					bitcounts[tid] = popcount(fm_index_entry[tid]);
 				}
 			
-				else if (in_warp_index == (9+bitcounts[warp_index*32]/32))
+				else if (tid == (9+bitcounts[0]/32))
 				{	
-					if (bitcounts[warp_index*32]%32){
-						bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - bitcounts[warp_index*32]%32)); 
+					if (bitcounts[0]%32){
+						bitcounts[tid] = popcount(fm_index_entry[tid] >> (32 - bitcounts[0]%32)); 
 					}
 					else
 						bitcounts[tid] = 0;
@@ -521,20 +545,20 @@ __kernel void sum(
 			}
 
 			//spocitat "vpravo"
-			if (in_warp_index >  8 && (alphabet_indexes[iterator] == 1 || alphabet_indexes[iterator] == 2))
+			if (tid >  8 && (alphabet_indexes[iterator] == 1 || alphabet_indexes[iterator] == 2))
 			{
 
-				a = fm_index_entry[warp_index*32 + 8];
+				a = fm_index_entry[8];
 
-				if (in_warp_index<(9+bitcounts[warp_index*32]/32))
+				if (tid<(9+bitcounts[0]/32))
 				{
 					bitcounts[tid] = popcount(fm_index_entry[tid + a]);
 				}
 			
-				else if (in_warp_index == (9+bitcounts[warp_index*32]/32))
+				else if (tid == (9+bitcounts[0]/32))
 				{	
-					if (bitcounts[warp_index*32]%32){
-						bitcounts[tid] = popcount((fm_index_entry[tid + a]) >> (32 - bitcounts[warp_index*32]%32)); 
+					if (bitcounts[0]%32){
+						bitcounts[tid] = popcount((fm_index_entry[tid + a]) >> (32 - bitcounts[0]%32)); 
 					}
 					else 
 						bitcounts[tid] = 0;
@@ -545,24 +569,24 @@ __kernel void sum(
 
 			barrier(CLK_LOCAL_MEM_FENCE);
 
-			if (in_warp_index == 9)
+			if (tid == 9)
 			{
 				if (alphabet_indexes[iterator] == 3 || alphabet_indexes[iterator] == 1)
 				{
-					for (a=1;a<=bitcounts[warp_index*32]/32;a++)
+					for (a=1;a<=bitcounts[0]/32;a++)
 						bitcounts[tid] += bitcounts[tid + a];
 				}	
 				else
 				{
-					for (a=1;a<=bitcounts[warp_index*32]/32;a++)
+					for (a=1;a<=bitcounts[0]/32;a++)
 						bitcounts[tid] += bitcounts[tid + a];
-					bitcounts[tid] = bitcounts[warp_index*32] - bitcounts[tid];
+					bitcounts[tid] = bitcounts[0] - bitcounts[tid];
 				}
 			}
 
 
 			//add occ_counter in fm index entry
-			if (in_warp_index == 0)
+			if (tid == 0)
 			{
 				if (alphabet_indexes[iterator] == 0)
 					count_table_results[iterator] = count_table[0] + fm_index_entry[20];
@@ -577,7 +601,7 @@ __kernel void sum(
 
 			barrier(CLK_LOCAL_MEM_FENCE);
 
-			if (in_warp_index == 9)
+			if (tid == 9)
 			{
 				count_table_results[iterator] += bitcounts[tid]; //fm_index_occ is already loaded
 			}
@@ -595,9 +619,9 @@ __kernel void sum(
 
 
 
-	if (in_warp_index ==0 ){
-		//printf("vraciam %d %d\n",8*workgroupID, warp_index);
+	if (tid ==0 ){
+		printf("vraciam %d\n",workgroupID);
 
-		output[8*workgroupID + warp_index] = 33;
+		output[workgroupID] = 33;
 	}
 }

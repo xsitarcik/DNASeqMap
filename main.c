@@ -8,35 +8,31 @@
 #include "compression.h"
 #include <CL/cl.h>
 
-#define DEVICE_GROUP_SIZE 256
-#define NUM_OF_READS_PER_WARP 8
-#define WARP_COUNT 3
+#define DEVICE_GROUP_SIZE 32
+#define NUM_OF_READS_PER_WARP 1
+#define WARP_COUNT 192
 #define MAX_SOURCE_SIZE 0x100000
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
 unsigned int sample_OCC_size = 2; //in reality it's *64, MUST SET TO 2
 unsigned int sample_SA_size = 32;
 unsigned char max_error = 1;
-int MAX_RESULTS = 200;
-int MIN_RESULT_LENGTH = 40; //pattern length /(maxerrror+1) / 2;
-unsigned int THRESHOLD = 150;
+unsigned int THRESHOLD = 500;
 
 //>SRR493095.1 M00282:31:000000000-A0FFK:1:1:13945:1807 length=150
 
+
+
+unsigned char load = 0;
+
 //program parameters
 unsigned char save = 0;
-unsigned char *save_name = "alt_Celera_chr15_bwt_withoutN.txt";
+unsigned char *save_name;
 
-unsigned char load = 1;
-
-unsigned char *load_name = "patdesiattisic_bwt2.txt";
-unsigned char*filename_text = "patdesiattisic.txt";
-unsigned char*filename_patterns = "meko.fa";
-
-/*unsigned char*filename_text = "alt_Celera_chr15.fa";
-unsigned char *load_name = "alt_Celera_chr15_bwt_withoutN.txt";
-unsigned char*filename_patterns = "SRR493095final.fasta";
-*/
+unsigned char*filename_text;// = "alt_Celera_chr15.fa";
+unsigned char *load_name;// = "alt_Celera_chr15_bwt_withoutN.txt";
+unsigned char*filename_patterns;// = "SRR493095final.fasta";
+//unsigned char*filename_patterns = "data/kratke_ready.fasta";
 
 unsigned int MAX_READ_LENGTH = 200;
 unsigned int READS_CHUNK = 70;
@@ -55,7 +51,7 @@ unsigned char flag_mtf = 1;
 unsigned char flag_huffman = 1;
 unsigned char flag_wavelet_tree = 0;
 unsigned char flag_entries = 1;
-unsigned char flag_use_gpu = 1;
+unsigned char flag_use_gpu = 0;
 
 //global program parametrrs
 unsigned int genome_length;
@@ -74,6 +70,36 @@ void error_handler(char err[], int code) {
   }
 }
 
+int convert_string_to_int(char *string)
+{
+  int i,ret = 0;
+  for(i=0; i<strlen(string); i++){
+        ret = ret * 10 + ( string[i] - '0' );
+      }
+  return ret;
+}
+
+void print_help()
+{ 
+  printf("***Sequence Mapper - Master's thesis - by Jozef Sitarcik***\n");
+  printf("Usage:\n");
+  printf("SeqMap [Required input] [Required input parameter] [Optional input]*\n");
+  printf(" Required input:\n");
+  printf("  -r <string>   name of input file for Ref seqeunce\n");
+  printf("  -p <string>   name of input file for Patterns\n");
+  printf(" Required input parameter - choose only one\n");
+  printf("  -w            use FM Index based on Huffman-shaped Wavelet tree\n");
+  printf("  -n            use FM Index aggregated in eNtries\n");
+  printf("  -g            use GPU\n");
+  printf(" Optional input:\n");
+  printf("  -t <int>      max Threshold of values for aligning (default %d)\n",THRESHOLD);
+  printf("  -e <int>      max allowed Error (default %d)\n", max_error);
+  printf("  -i <string>   filename of prebuilt Index to load (defaultly not used)\n");
+  printf("  -b <string>   filename to save Built Bwt (defaultly not used)\n");
+  printf("  -c <int>      value for sampling Counters (default %d)\n",sample_OCC_size*64);
+  printf("  -s <int>      value for sampling Suff arr values (default %d)\n",sample_SA_size);
+
+}
 int main ( int argc, char *argv[] )
 {
  int i,j,k,count = 0;
@@ -87,19 +113,66 @@ int main ( int argc, char *argv[] )
  struct compressedFMIndex *compressed_FM_index = NULL;
  unsigned int result_map;
 
+
+ naive_compress("AAGCT");
+
+//handle input options and parameters
+for (i = 1; i<argc; i++)
+{
+  if (strcmp(argv[i],"-h") == 0)
+  {
+    print_help();
+    return 0;
+  }
+  else if (strcmp(argv[i],"-t") == 0)
+    THRESHOLD = convert_string_to_int(argv[++i]);
+  else if (strcmp(argv[i],"-e") == 0)
+    max_error = convert_string_to_int(argv[++i]);
+  else if (strcmp(argv[i],"-s") == 0)
+    sample_SA_size = convert_string_to_int(argv[++i]);
+  else if (strcmp(argv[i],"-c") == 0)
+    sample_OCC_size = convert_string_to_int(argv[++i]);
+  else if (strcmp(argv[i],"-w") == 0)
+    flag_wavelet_tree = 1;
+  else if (strcmp(argv[i],"-n") == 0)
+    flag_entries = 1;
+  else if (strcmp(argv[i],"-g") == 0)
+    flag_use_gpu = 1;
+
+  else if (strcmp(argv[i],"-r") == 0)
+  {
+    filename_text = (char *) realloc (filename_text, sizeof(char) * strlen(argv[++i])+1);
+    strcpy(filename_text, argv[i]);
+  }
+  else if (strcmp(argv[i],"-p") == 0)
+  {
+    filename_patterns = (char *) realloc (filename_patterns,sizeof(char)*strlen(argv[++i])+1);
+    strcpy(filename_patterns, argv[i]);
+  }
+  else if (strcmp(argv[i],"-i") == 0)
+  {
+    load = 1;
+    load_name = (char *) realloc (load_name, sizeof(char)*strlen(argv[++i])+1);
+    strcpy(load_name, argv[i]);
+  }
+  else if (strcmp(argv[i],"-b") == 0)
+  {
+    save = 1;
+    save_name = (char *) realloc (save_name, sizeof(char)*strlen(argv[++i])+1);
+    strcpy(save_name, argv[i]);
+  }
+}
+
  FILE *fp;
  FILE *fh_patterns;
  char *pattern = (char*)malloc(sizeof(char)*MAX_READ_LENGTH);
- /*
- for (i=0;i<argc;i++)
+ 
+ if (!(load) && !(save))
  {
-  printf("%s\n",argv[i]);
- }*/
-
- //genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
- genome = load_genome_from_file(filename_text,&genome_length);
-
- printf("loaded genome\n");
+  genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
+ //genome = load_genome_from_file(filename_text,&genome_length);
+ printf("Successfully loaded genome with length %u\n",genome_length);
+ }
 
  if (load)
  {
@@ -146,8 +219,6 @@ int main ( int argc, char *argv[] )
   suffix_array = init_suffix_array(suffix_array,genome,genome_length);
   
   bwt = create_bwt(suffix_array,genome,genome_length);
-  //printf("%s\n",bwt);
-
   clock_t end = clock();
   double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
   printf("construction of BWT took: %lf seconds\n", time_spent);
@@ -161,17 +232,6 @@ int main ( int argc, char *argv[] )
   printf("Error when loading patterns from file %s\n",filename_patterns);
   exit(-1);
  }
-
- //reverse_string(genome);
-
- //should handle cases like:
- //count if memory is sufficient
- // for construction of SA we need cca 5n bytes 
- // then for bwt we need another n bytes
- // so together 6n bytes at least, 
- // if its not sufficient, break origin string
-
- 
  
 //save created BWT in file
 if (save)
@@ -191,31 +251,16 @@ if (save)
  fclose(fp);
  }
 
-
- //build FMIndex and free suffix_array AND GENOME (to do)
+ //build FMIndex using compression methods
  if (flag_compress)
  {
   compressed_FM_index = build_compressed_FM_index(suffix_array,bwt,flag_mtf, flag_runs, flag_huffman, block_size);
-  printf("ide sa na vypocet\n");
-  fflush(stdout);
-  int*result = approximate_search_in_compressed_FM_index(compressed_FM_index,"TAATCGGTGGGAGTATTCAACGTGATGAAGAC",flag_mtf,flag_runs,flag_huffman);
+
+  /*int*result = approximate_search_in_compressed_FM_index(compressed_FM_index,"TAATCGGTGGGAGTATTCAACGTGATGAAGAC",flag_mtf,flag_runs,flag_huffman);
   printf("results: %d %d\n",result[0],result[1]);
   printf("ide sa na vypocet\n");
-  fflush(stdout);
+  fflush(stdout);*/
   
-
-  /*clock_t begin2 = clock();
-  for (i=0;i<10000;i=i+10){
-    j = i/block_size;
-    k = i - j*block_size;
-    unsigned char *ret = decompress_block(compressed_FM_index->array_of_blocks[j].bitvector_length,compressed_FM_index->array_of_blocks[j].bitvector,flag_mtf,flag_runs,flag_huffman,k+1,alphabet,compressed_FM_index->array_of_blocks[j].huffman_tree);
-    free(ret);
-  }
-   clock_t end2 = clock();
-  double time_spent2 = (double)(end2 - begin2) / CLOCKS_PER_SEC;
-  printf("%d access operacie %lf", i/10, time_spent2);
-  */
-
   //freeing FM Index
   for (i=0;i<compressed_FM_index->length;i++)
   {
@@ -234,30 +279,47 @@ if (save)
   //build FM Index with WT for backward search
   FM_index_WT = build_FM_index_WT(suffix_array,bwt);
   
-  printf("--------------------------------------\n");
-  
-  char c;
   unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
   if (result == NULL)
   {
-   printf("error pri alokacii\n");
+   printf("error when allocating memory for result used when searching patterns\n");
    exit(-1);
   }
 
   printf("...approximate searching...\n");
+  
   k = 0;
   count = 0;
-
+  char o = 0;
+  char line[256];
   clock_t begin1 = clock();
+  fgets(line, 256, fh_patterns);
   //get name of the read
-  while (fgets(pattern, MAX_READ_LENGTH, fh_patterns) != NULL) 
-  { 
-   for (i=0;i<3;i++)
-   {
-    fgets(&pattern[i*READS_CHUNK], READS_CHUNK+2, fh_patterns );
-   }
+  while (1) 
+  {
+   pattern[0] = '\0';
+   i = 0;
+   while (1)
+    {
+     if (fgets(line, 256, fh_patterns)!= NULL);
+      else{
+        o = 1;
+        break;
+      }
+     if (line[0] == '>')
+      break;
+     else {
+      strncpy(&pattern[i],line, strlen(line)-1);
+      i = i + strlen(line) - 1;
+    }
 
-   pattern[strlen(pattern)-1]='\0';
+    }
+   if (o)
+    break;
+
+   printf("nacital: -%s-, %d\n",pattern,i);
+   fflush(stdout);
+   pattern[i-1]='\0';
    k++;
    if (strchr(pattern,'N')==NULL)
    {
@@ -266,35 +328,16 @@ if (save)
     {
      ++count;
      printf("-%s-\n",pattern);
+     fflush(stdout);
      printf("approximate position is %d\n",result_map);
     }
    }
   }
-
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
   printf("Total aligned reads: %d\n",count);
   printf("Total reads: %d\n",k);
-
-  //long long int result = approximate_search_in_FM_index_WT(max_errors,FM_index_WT,"TCGATTATATCACTTAATGACTTTTGGGTCAGGGTGTGTTACCTTACAGGAATTGAGACCGTCCATTAATTTCTCTTGCATTTAT");
-  //printf("result je %lld\n",result);
-  //build FM Index with WT for forward search
-   //..
-//CGTAACTCG-TT GCTCAGTCGCTTT TCGTACTGCGCG -2errors
-//CGTATCTCGATT GCTCAGTCGCTTT TCGTACTGCGCG withour error
-  /*
-  
-  for (i=0;i<genome_length;i++){
-   wt_access(i,FM_index_WT->WT_root,sample_OCC_size);
-   //printf("na pozicii %d je znak %c\n",i,wt_access(i,FM_index_WT->WT_root,sample_OCC_size));
-   //printf("pocet %c do pozicie %d je %d\n",'C',69,wt_rank('A',69+1,root,sample_OCC_size));
-  }
-  clock_t end1 = clock();
-  double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
-  printf("%d access operacie %lf", i, time_spent1);
-  */
-  
 
   free(FM_index_WT->sampleSA);
   free(count_table);
@@ -304,7 +347,7 @@ if (save)
  else if (flag_entries)
  {
 
-  printf("rebuilding index...\n");
+  printf("...rebuilding FM Index into entries...\n");
   fflush(stdout);
 
   rebuild_FM_index_into_entries(suffix_array,bwt);
@@ -372,7 +415,6 @@ if (save)
   outputMemObj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(unsigned int)*WARP_COUNT*NUM_OF_READS_PER_WARP, NULL, &ret);
   error_handler("Create output buffer failed", ret);
 
-
   /* read kernel file from source */
   char fileName[] = "./sum.cl";
   char *sourceStr;  
@@ -391,7 +433,7 @@ if (save)
   /* create program object */
   cl_program program = clCreateProgramWithSource(context, 1, (const char**)&sourceStr, (const size_t*)&sourceSize, &ret); 
   error_handler("create program failure", ret);
-  ret = clBuildProgram(program, 1, &deviceID, NULL, NULL, NULL);
+  ret = clBuildProgram(program, 1, &deviceID, "-cl-mad-enable", NULL, NULL);
   if(ret != CL_SUCCESS) {
     puts("Build program error");
     size_t len;
@@ -420,7 +462,7 @@ if (save)
   error_handler("Set arg 6 failure", ret);
   ret = clSetKernelArg(kernel, 6, sizeof(char) * NUM_OF_READS_PER_WARP * PATTERN_LENGTH, NULL);
   error_handler("Set arg 7 failure", ret);
-  ret = clSetKernelArg(kernel, 7, sizeof(unsigned int) * 4 * NUM_OF_READS_PER_WARP, NULL); //indexes
+  ret = clSetKernelArg(kernel, 7, sizeof(unsigned int) * 8 * NUM_OF_READS_PER_WARP, NULL); //indexes
   error_handler("Set arg 8 failure", ret);
   ret = clSetKernelArg(kernel, 8, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //fm_index entry
   error_handler("Set arg 9 failure", ret);
@@ -435,7 +477,7 @@ if (save)
    clock_t begin1 = clock();
 
   /* enqueue and execute */
-  const size_t globalWorkSize = 768;
+  const size_t globalWorkSize = 6144;
   const size_t localWorkSize = DEVICE_GROUP_SIZE;
   printf("global %lu, local %lu\n",globalWorkSize, localWorkSize);
   ret = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, &globalWorkSize, &localWorkSize, 0, NULL, NULL);
@@ -455,27 +497,45 @@ if (save)
 
   else
   {
-
-  //char c;
   unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
   if (result == NULL)
   {
-   printf("error pri alokacii\n");
+   printf("error when allocating result array for searching patterns\n");
    exit(-1);
   }
 
   printf("...approximate searching...\n");
   k = 0;
   count = 0;
-
+  char o = 0;
   clock_t begin1 = clock();
   //get name of the read
-  /*while (fgets(pattern, MAX_READ_LENGTH, fh_patterns) != NULL) 
+  while (1) 
   { 
-   for (i=0;i<3;i++)
+   char line[256];
+   pattern[0] = '\0';
+   i = 0;
+   while (1)
+    {
+     if (fgets(line, sizeof(line), fh_patterns)!= NULL);
+      else{
+        o = 1;
+        break;
+      }
+     if (line[0] == '>')
+      break;
+     else {
+      strcpy(&pattern[i],line);
+      i = i + strlen(line) - 1;
+    }
+
+    }
+   if (o)
+    break;
+   /*for (i=0;i<3;i++) CTCAGCTTAGGACCCGACTAACCCAGAGCGGACGAGCCTTCCTCTGGAAACCTTAGTCAATCGGTGGACG
    {
     fgets(&pattern[i*READS_CHUNK], READS_CHUNK+2, fh_patterns );
-   }
+   }*/
    pattern[strlen(pattern)-1]='\0';
    k++;
    if (strchr(pattern,'N')==NULL)
@@ -483,14 +543,14 @@ if (save)
     result_map = approximate_search_in_FM_index_entry(pattern,result);
     if (result_map)
     {
-     ++count;
+     ++count; 
      printf("-%s-\n",pattern);
      fflush(stdout);
      printf("approximate position is %d\n",result_map);
     }
    }
-  }*/
-  result_map = approximate_search_in_FM_index_entry("TCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCA",result);
+  }
+  //result_map = approximate_search_in_FM_index_entry("TCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCA",result);
 
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
@@ -499,7 +559,7 @@ if (save)
   printf("Total reads: %d\n",k);
   }
  }
- else
+ else 
  {
   FM_index = build_FM_index(suffix_array,bwt);
   

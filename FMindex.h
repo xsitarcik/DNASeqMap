@@ -5,8 +5,6 @@ extern unsigned int sample_OCC_size; //in reality it's *64
 extern unsigned int sample_SA_size;
 extern unsigned int genome_length;
 extern unsigned char max_bits;
-extern int MAX_RESULTS;
-extern int MIN_RESULT_LENGTH;
 extern struct FMIndex_WT *FM_index_WT;
 extern unsigned char*genome;
 extern struct wavelet_tree *WT_root;

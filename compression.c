@@ -1437,3 +1437,95 @@ else return 0;
   return wt_rank(c,count,root->right);
  }
 }
+
+unsigned char * naive_compress(unsigned char *s)
+{
+  //A - 00, T - 01, C - 11, G - 10  
+  unsigned int i;
+  unsigned int a = 0;
+  unsigned int string_length = strlen(s);
+  unsigned int new_length = (string_length+3)/4 + 1;
+  unsigned char* compressed_genome = (unsigned char*) calloc ( new_length, sizeof(char));
+  for (i = 0; i < (string_length-4); i = i+4, a++)
+  {
+    switch (s[i])
+    {
+      case 'C' : 
+        compressed_genome[a] = compressed_genome[a] | 3;
+        break;
+      case 'G' :
+        compressed_genome[a] = compressed_genome[a] | 2;
+        break;
+      case 'T' :
+        compressed_genome[a] = compressed_genome[a] | 1;
+        break;
+    }
+
+    compressed_genome[a] = compressed_genome[a] << 2;
+    switch (s[i+1])
+    {
+      case 'C' : 
+        compressed_genome[a] = compressed_genome[a] | 3;
+        break;
+      case 'G' :
+        compressed_genome[a] = compressed_genome[a] | 2;
+        break;
+      case 'T' :
+        compressed_genome[a] = compressed_genome[a] | 1;
+        break;
+    }
+
+    compressed_genome[a] = compressed_genome[a] << 2;
+    switch (s[i+2])
+    {
+      case 'C' : 
+        compressed_genome[a] = compressed_genome[a] | 3;
+        break;
+      case 'G' :
+        compressed_genome[a] = compressed_genome[a] | 2;
+        break;
+      case 'T' :
+        compressed_genome[a] = compressed_genome[a] | 1;
+        break;
+    }
+
+    compressed_genome[a] = compressed_genome[a] << 2;
+    switch (s[i+3])
+    {
+      case 'C' : 
+        compressed_genome[a] = compressed_genome[a] | 3;
+        break;
+      case 'G' :
+        compressed_genome[a] = compressed_genome[a] | 2;
+        break;
+      case 'T' :
+        compressed_genome[a] = compressed_genome[a] | 1;
+        break;
+    }     
+  }
+
+  //handle remainder
+  unsigned int remainder = i - (string_length - 4); //how many remaining bases?
+  for (; i <string_length; i++)
+  {
+    switch (s[i])
+    {
+      case 'C' : 
+        compressed_genome[a] = compressed_genome[a] | 3;
+        break;
+      case 'G' :
+        compressed_genome[a] = compressed_genome[a] | 2;
+        break;
+      case 'T' :
+        compressed_genome[a] = compressed_genome[a] | 1;
+        break;
+    }
+    compressed_genome[a] = compressed_genome[a] << 2;
+  }
+
+  compressed_genome[a] = compressed_genome[a] << (2*(remainder-1));
+  compressed_genome[a+1] = '\0';
+  
+  //free(s);
+  return compressed_genome;
+}
