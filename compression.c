@@ -1240,7 +1240,7 @@ unsigned int* build_bitcount_table(unsigned long long int *bitvector, unsigned i
  unsigned int count = 0;
  unsigned int number = 1+(bitvector_length-1)/sample_OCC_size;
  unsigned int* bitcount_table = (unsigned int*) malloc (sizeof(unsigned int)*number);
- printf("building bitcount table on %d words(64bits) - used %d bytes\n",bitvector_length,number*sizeof(unsigned int));
+ printf("building bitcount table on %d words(64bits) - used %lu bytes\n",bitvector_length,number*sizeof(unsigned int));
  for (i = 0; i<bitvector_length;i++)
  {
   count = count + __builtin_popcountll(bitvector[i]);

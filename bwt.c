@@ -6,7 +6,7 @@
 //auxiliary method for loading genome from file by chunks with newlines
 unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, unsigned char*file,unsigned int*genome_length){
   unsigned char *buffer = (unsigned char *)malloc(sizeof(unsigned char)*chunk_size);
-  unsigned char nazovTextu[100];
+  unsigned char nazovTextu[250];
   unsigned char *s = NULL;
   unsigned int sum = 0;
 
@@ -16,7 +16,7 @@ unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, unsigne
 
   if (f)
   {
-   fgets(nazovTextu, 100, f);
+   fgets(nazovTextu, 250, f);
    printf("...nacitavam retazec %s",nazovTextu);
 
    while ((nread = fread(buffer,1,chunk_size,f)) > 0)

@@ -49,8 +49,9 @@ unsigned char flag_compress = 0;
 unsigned char flag_runs = 7;
 unsigned char flag_mtf = 1;
 unsigned char flag_huffman = 1;
+
 unsigned char flag_wavelet_tree = 0;
-unsigned char flag_entries = 1;
+unsigned char flag_entries = 0;
 unsigned char flag_use_gpu = 0;
 
 //global program parametrrs
@@ -87,7 +88,7 @@ void print_help()
   printf(" Required input:\n");
   printf("  -r <string>   name of input file for Ref seqeunce\n");
   printf("  -p <string>   name of input file for Patterns\n");
-  printf(" Required input parameter - choose only one\n");
+  printf(" Required option - choose only one\n");
   printf("  -w            use FM Index based on Huffman-shaped Wavelet tree\n");
   printf("  -n            use FM Index aggregated in eNtries\n");
   printf("  -g            use GPU\n");
@@ -114,7 +115,7 @@ int main ( int argc, char *argv[] )
  unsigned int result_map;
 
 
- naive_compress("AAGCT");
+ /*naive_compress("AAGCT");*/
 
 //handle input options and parameters
 for (i = 1; i<argc; i++)
@@ -130,8 +131,13 @@ for (i = 1; i<argc; i++)
     max_error = convert_string_to_int(argv[++i]);
   else if (strcmp(argv[i],"-s") == 0)
     sample_SA_size = convert_string_to_int(argv[++i]);
-  else if (strcmp(argv[i],"-c") == 0)
-    sample_OCC_size = convert_string_to_int(argv[++i]);
+  else if (strcmp(argv[i],"-c") == 0){
+    sample_OCC_size = convert_string_to_int(argv[++i])/64;
+    if (sample_OCC_size<1){
+      printf("Error - sampling size for counters cant be lower than 64 because of usage 64bitwords\n");
+      return(-1);
+    }
+  }
   else if (strcmp(argv[i],"-w") == 0)
     flag_wavelet_tree = 1;
   else if (strcmp(argv[i],"-n") == 0)
@@ -167,17 +173,14 @@ for (i = 1; i<argc; i++)
  FILE *fh_patterns;
  char *pattern = (char*)malloc(sizeof(char)*MAX_READ_LENGTH);
  
- if (!(load) && !(save))
- {
-  genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
- //genome = load_genome_from_file(filename_text,&genome_length);
- printf("Successfully loaded genome with length %u\n",genome_length);
- }
 
  if (load)
  {
   fp = fopen(load_name,"r");
   if (fp) {
+   genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
+   //genome = load_genome_from_file(filename_text,&genome_length);
+   printf("Successfully loaded genome with length %u\n",genome_length);
    printf("...loading BWT from file %s... \n",load_name);
    genome_length = 0;
    fscanf (fp, "%u\n", &genome_length); 
@@ -317,8 +320,8 @@ if (save)
    if (o)
     break;
 
-   printf("nacital: -%s-, %d\n",pattern,i);
-   fflush(stdout);
+   /*printf("nacital: -%s-, %d\n",pattern,i);
+   fflush(stdout);*/
    pattern[i-1]='\0';
    k++;
    if (strchr(pattern,'N')==NULL)
@@ -505,19 +508,20 @@ if (save)
   }
 
   printf("...approximate searching...\n");
-  k = 0;
+ k = 0;
   count = 0;
   char o = 0;
+  char line[256];
   clock_t begin1 = clock();
+  fgets(line, 256, fh_patterns);
   //get name of the read
   while (1) 
-  { 
-   char line[256];
+  {
    pattern[0] = '\0';
    i = 0;
    while (1)
     {
-     if (fgets(line, sizeof(line), fh_patterns)!= NULL);
+     if (fgets(line, 256, fh_patterns)!= NULL);
       else{
         o = 1;
         break;
@@ -525,13 +529,14 @@ if (save)
      if (line[0] == '>')
       break;
      else {
-      strcpy(&pattern[i],line);
+      strncpy(&pattern[i],line, strlen(line)-1);
       i = i + strlen(line) - 1;
     }
 
     }
    if (o)
     break;
+  
    /*for (i=0;i<3;i++) CTCAGCTTAGGACCCGACTAACCCAGAGCGGACGAGCCTTCCTCTGGAAACCTTAGTCAATCGGTGGACG
    {
     fgets(&pattern[i*READS_CHUNK], READS_CHUNK+2, fh_patterns );

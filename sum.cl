@@ -440,12 +440,10 @@ __kernel void sum(
 						bitcounts[tid] = 0;
 				}
 			}
-
 			else if (tid == 8)
 				bitcounts[tid] = 31 - indexes[1]%32;
 			else if (tid == 9)
 				bitcounts[tid] = indexes[1]/32;
-
 
 			barrier(CLK_LOCAL_MEM_FENCE);
 			//counting together
@@ -475,19 +473,16 @@ __kernel void sum(
 					bitcounts[tid] = indexes[1] - bitcounts[0];
 			}
 
-
 			if (tid == 0 && workgroupID == 0)
 				printf("sum1 %d, sum0 %d, zvy %d, pod %d, c %d\n",bitcounts[0],bitcounts[1], bitcounts[2], bitcounts[3], bitcounts[8]);
 
 			barrier(CLK_LOCAL_MEM_FENCE);
-
 			if (tid == 2)
 				bitcounts[tid] = 31  - bitcounts[1]%32;
 			else if (tid == 3)
 				bitcounts[tid] = bitcounts[1]/32;
 			
 			barrier(CLK_LOCAL_MEM_FENCE);
-
 			if (tid == 9 )
 			{
 				if (bitcounts[8])
@@ -504,13 +499,10 @@ __kernel void sum(
 					else
 						alphabet_indexes[iterator] = 0;
 				}
-			}
-			
+			}		
 			barrier(CLK_LOCAL_MEM_FENCE);
 
 			//koniec wt_access
-
-
 			//1 z 32
 			if (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3)
 			{
@@ -519,21 +511,16 @@ __kernel void sum(
 					bitcounts[tid] = indexes[1] - bitcounts[0];
 				}
 			}
-			
-
 			barrier(CLK_LOCAL_MEM_FENCE);
-
 
 			//max 8 threadov, 9-17 pozicia
 			//spocitat 'vlavo"
 			if (tid >  8 && (alphabet_indexes[iterator] == 0 || alphabet_indexes[iterator] == 3))
 			{
-
 				if (tid<(9+bitcounts[0]/32))
 				{
 					bitcounts[tid] = popcount(fm_index_entry[tid]);
 				}
-			
 				else if (tid == (9+bitcounts[0]/32))
 				{	
 					if (bitcounts[0]%32){
@@ -547,14 +534,11 @@ __kernel void sum(
 			//spocitat "vpravo"
 			if (tid >  8 && (alphabet_indexes[iterator] == 1 || alphabet_indexes[iterator] == 2))
 			{
-
 				a = fm_index_entry[8];
-
 				if (tid<(9+bitcounts[0]/32))
 				{
 					bitcounts[tid] = popcount(fm_index_entry[tid + a]);
-				}
-			
+				}			
 				else if (tid == (9+bitcounts[0]/32))
 				{	
 					if (bitcounts[0]%32){
@@ -562,13 +546,10 @@ __kernel void sum(
 					}
 					else 
 						bitcounts[tid] = 0;
-				}
-
-				
+				}				
 			}
 
 			barrier(CLK_LOCAL_MEM_FENCE);
-
 			if (tid == 9)
 			{
 				if (alphabet_indexes[iterator] == 3 || alphabet_indexes[iterator] == 1)
@@ -584,7 +565,6 @@ __kernel void sum(
 				}
 			}
 
-
 			//add occ_counter in fm index entry
 			if (tid == 0)
 			{
@@ -596,21 +576,17 @@ __kernel void sum(
 					count_table_results[iterator] = count_table[2] + fm_index_entry[22];
 				else if (alphabet_indexes[iterator] == 3)
 					count_table_results[iterator] = count_table[3] + fm_index_entry[21];
-				
 			}
-
 			barrier(CLK_LOCAL_MEM_FENCE);
-
 			if (tid == 9)
 			{
 				count_table_results[iterator] += bitcounts[tid]; //fm_index_occ is already loaded
 			}
-
 			i++;
 			barrier(CLK_LOCAL_MEM_FENCE);
-
 		}
 
+		
 		if (tid == 0 && workgroupID ==0)
 			printf("sa result je %d, count je %d\n",count_table_results[iterator],i);
 		temp++;
