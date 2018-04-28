@@ -10,7 +10,7 @@
 
 #define DEVICE_GROUP_SIZE 32
 #define NUM_OF_READS_PER_WARP 1
-#define WARP_COUNT 192
+#define WARP_COUNT 1024
 #define MAX_SOURCE_SIZE 0x100000
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
@@ -142,8 +142,10 @@ for (i = 1; i<argc; i++)
     flag_wavelet_tree = 1;
   else if (strcmp(argv[i],"-n") == 0)
     flag_entries = 1;
-  else if (strcmp(argv[i],"-g") == 0)
+  else if (strcmp(argv[i],"-g") == 0){
     flag_use_gpu = 1;
+    flag_entries = 1;
+  }
 
   else if (strcmp(argv[i],"-r") == 0)
   {
@@ -354,19 +356,24 @@ if (save)
   fflush(stdout);
 
   rebuild_FM_index_into_entries(suffix_array,bwt);
-  
+
   if (flag_use_gpu)
   {
 
+    
+
     char *patterns_batch = (char *) malloc (sizeof(char) * (WARP_COUNT * NUM_OF_READS_PER_WARP * 64 + 1));
     i = 0;
+    char header[256];
     while (i != (WARP_COUNT*NUM_OF_READS_PER_WARP))
     {
+      fgets(header,70,fh_patterns);
       fgets(&patterns_batch[i*64], 70, fh_patterns); //header of pattern
       i++;
     }
 
-    printf("%s\n",patterns_batch);
+    patterns_batch[WARP_COUNT * NUM_OF_READS_PER_WARP * 64] = '\0';
+
 /* define platform */
   cl_platform_id platformID;
   ret = clGetPlatformIDs(1, &platformID, NULL);
@@ -415,7 +422,7 @@ if (save)
 
   // output need only be an array of inputSize / DEVICE_GROUP_SIZE long
   cl_mem outputMemObj;
-  outputMemObj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(unsigned int)*WARP_COUNT*NUM_OF_READS_PER_WARP, NULL, &ret);
+  outputMemObj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(unsigned int)*WARP_COUNT*NUM_OF_READS_PER_WARP*4, NULL, &ret);
   error_handler("Create output buffer failed", ret);
 
   /* read kernel file from source */
@@ -476,22 +483,25 @@ if (save)
   ret = clSetKernelArg(kernel, 11, sizeof(cl_mem), (void *)&inputMemObj_fm_index);
   error_handler("Set arg 12 failure", ret);
 
-
-   clock_t begin1 = clock();
+  clock_t begin1 = clock();
 
   /* enqueue and execute */
-  const size_t globalWorkSize = 6144;
+  const size_t globalWorkSize = WARP_COUNT*32;
   const size_t localWorkSize = DEVICE_GROUP_SIZE;
-  printf("global %lu, local %lu\n",globalWorkSize, localWorkSize);
   ret = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, &globalWorkSize, &localWorkSize, 0, NULL, NULL);
   error_handler("Enqueue/execute failure", ret);
 
-  unsigned int * results = (unsigned int*) malloc(sizeof(unsigned int)*NUM_OF_READS_PER_WARP*WARP_COUNT);
+  unsigned int * results = (unsigned int*) malloc(sizeof(unsigned int)*NUM_OF_READS_PER_WARP*WARP_COUNT*4);
 
-  ret = clEnqueueReadBuffer(commandQueue, outputMemObj, CL_TRUE, 0, sizeof(unsigned int)*NUM_OF_READS_PER_WARP*WARP_COUNT, results, 0, NULL, NULL);
+  ret = clEnqueueReadBuffer(commandQueue, outputMemObj, CL_TRUE, 0, sizeof(unsigned int)*NUM_OF_READS_PER_WARP*WARP_COUNT*4, results, 0, NULL, NULL);
   error_handler("Read output buffer fail", ret);
 
+  /*for (i = 0; i<NUM_OF_READS_PER_WARP*WARP_COUNT*2;i++,i++)
+  {
+    printf("%d rozsahy su : %u %u\n",i,results[i],results[i+1]);
 
+  }*/
+  approximate_search_gpu(patterns_batch, results, 64, WARP_COUNT);
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
@@ -566,9 +576,11 @@ if (save)
  }
  else 
  {
+  printf("You need to specify -g -w or -n\n");
+  exit(-1);
   FM_index = build_FM_index(suffix_array,bwt);
   
-  print_info_fm_index(FM_index);
+  //print_info_fm_index(FM_index);
   int*result = approximate_search(FM_index,"TYYASI");
   printf("results: %d %d\n",result[0],result[1]);
   while (result[0]<result[1])

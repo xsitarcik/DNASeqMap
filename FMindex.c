@@ -740,6 +740,112 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
 return 0;
 }
 
+long long int approximate_search_gpu(unsigned char *patterns, unsigned int *results, unsigned int pattern_length, unsigned int reads_count)
+{
+  unsigned int k,temp, i;
+  unsigned int current_pattern_start = 32;
+  unsigned char pattern_test[100];
+  unsigned int counter = 0;
+  char o = 0;
+
+  for (i = 0; i<reads_count*4;i++,i++)
+  {
+    o = 0;
+    if (results[i+1]-results[i]<THRESHOLD)
+    {
+      while (results[i]!=results[i+1])
+      {
+        temp = get_SA_value_entry(results[i]);
+        results[i]++;
+        if (temp>=current_pattern_start)
+        {
+          temp = temp - current_pattern_start;
+       
+          memcpy(pattern_test, &patterns[i/4*pattern_length], pattern_length);
+          pattern_test[pattern_length] = '\0';
+          k = 0;
+          while (genome[temp]!=pattern_test[0] && (k<=max_error+1))
+          {
+           temp++;
+           k++;
+          }
+          if (k<=max_error+1)
+          {
+           unsigned char genome_test[pattern_length+2];
+           if (k>0)
+           {
+            memcpy(genome_test, &genome[temp], pattern_length+1);
+            genome_test[pattern_length+1] = '\0';
+           }
+           else 
+           {
+            memcpy(genome_test, &genome[temp], pattern_length+1);
+            genome_test[pattern_length+1] = '\0';
+          }
+           if (align(pattern_test,genome_test))
+           {
+            counter++;
+            printf("%d-%s-\n",i,pattern_test);
+            printf("Approximate position: %u\n",temp);
+            o = 1;
+            break;
+           }
+          }
+        }
+      }
+    }
+
+    current_pattern_start = 0;
+    i++;i++;
+    if (o==0 && results[i+1]-results[i]<THRESHOLD)
+    {
+      while (results[i]!=results[i+1])
+      {
+        temp = get_SA_value_entry(results[i]);
+        results[i]++;
+        if (temp>=current_pattern_start)
+        {
+          temp = temp - current_pattern_start;
+       
+          memcpy(pattern_test, &patterns[i/4*pattern_length], pattern_length);
+          pattern_test[pattern_length] = '\0';
+          k = 0;
+          while (genome[temp]!=pattern_test[0] && (k<=max_error+1))
+          {
+           temp++;
+           k++;
+          }
+          if (k<=max_error+1)
+          {
+           unsigned char genome_test[pattern_length+2];
+           if (k>0)
+           {
+            memcpy(genome_test, &genome[temp], pattern_length+1);
+            genome_test[pattern_length+1] = '\0';
+           }
+           else 
+           {
+            memcpy(genome_test, &genome[temp], pattern_length+1);
+            genome_test[pattern_length+1] = '\0';
+          }
+           if (align(pattern_test,genome_test))
+           {
+            counter++;
+            printf("%d-%s-\n",i,pattern_test);
+            printf("Approximate position: %u\n",temp);
+            break;
+           }
+          }
+        }
+      }
+    }
+
+
+  }
+return counter;
+  
+
+}
 //procedure which breaks input pattern and search each separately in FM index - Wavelet tree
 long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsigned int*result)
 {
@@ -757,7 +863,7 @@ long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsig
  int i = max_error;
  current_pattern_start = pattern_length;
 
- while(i>=0 && current_error<=max_error)
+ while(i>=0)
  {
   
   if (div_pattern_length<current_pattern_start)
@@ -918,7 +1024,7 @@ unsigned char align(char *p1, char*p2)
   if ((i-matrix[i][p2length])<=max_error){
     return 1;
   }
-  }
+ }
   
   for (i=p2length-max_error;i<=p2length;i++)
   {
@@ -1213,9 +1319,7 @@ if (bit_index) {
  while (i%32 != 18)
   i++;
 
-printf("zacinam zapisovat OCC_ROOT na poziciu %d\n",i);  //2hodnoty 18..19
- //store counters
-  printf("zvysok je %u, i%d\n",(genome_length - (i/32)*256),i);
+//store counters
 
 temp_count = 0;
   for (a = 0; a < (genome_length - (i/32)*256)/32; a++)
@@ -1228,8 +1332,6 @@ temp_count = 0;
     temp_count += __builtin_popcount (entries[i+a-19]);
   }
   entries[i++] = temp_count;//count_set_bits(root->bitvector,root_counter_iter-1,root->bitcount_table);
-
-  printf("a%d pozicia %d, hodnota %u, %u\n",a,i,entries[i-2],entries[i-1]);
 
 /*fflush(stdout);
  exit(-1);*/

@@ -44,7 +44,7 @@ struct compressedFMIndex
  struct compressed_block *array_of_blocks;
 };
 
-
+long long int approximate_search_gpu(unsigned char *patterns, unsigned int *results, unsigned int pattern_length, unsigned int reads_count);
 long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsigned int*result);
 void threshold_search_pattern_in_FM_index_entry(char *pattern, unsigned int *result_length, unsigned int *result, unsigned int pattern_length);
 unsigned int extend_seed_in_FM_index_entry(unsigned char*pattern, unsigned int last, unsigned int*result);
