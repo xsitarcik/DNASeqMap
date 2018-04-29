@@ -360,11 +360,10 @@ if (save)
   if (flag_use_gpu)
   {
 
-    
-
     char *patterns_batch = (char *) malloc (sizeof(char) * (WARP_COUNT * NUM_OF_READS_PER_WARP * 64 + 1));
     i = 0;
     char header[256];
+    clock_t begin1 = clock();
     while (i != (WARP_COUNT*NUM_OF_READS_PER_WARP))
     {
       fgets(header,70,fh_patterns);
@@ -472,18 +471,17 @@ if (save)
   error_handler("Set arg 6 failure", ret);
   ret = clSetKernelArg(kernel, 6, sizeof(char) * NUM_OF_READS_PER_WARP * PATTERN_LENGTH, NULL);
   error_handler("Set arg 7 failure", ret);
-  ret = clSetKernelArg(kernel, 7, sizeof(unsigned int) * 8 * NUM_OF_READS_PER_WARP, NULL); //indexes
+  ret = clSetKernelArg(kernel, 7, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //fm_index entry
   error_handler("Set arg 8 failure", ret);
-  ret = clSetKernelArg(kernel, 8, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //fm_index entry
+  ret = clSetKernelArg(kernel, 8, sizeof(unsigned int) * DEVICE_GROUP_SIZE * 2, NULL); //count_table_results
   error_handler("Set arg 9 failure", ret);
-  ret = clSetKernelArg(kernel, 9, sizeof(unsigned int) * DEVICE_GROUP_SIZE * 2, NULL); //count_table_results
+  ret = clSetKernelArg(kernel, 9, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //bitcounts
   error_handler("Set arg 10 failure", ret);
-  ret = clSetKernelArg(kernel, 10, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //bitcounts
+  ret = clSetKernelArg(kernel, 10, sizeof(cl_mem), (void *)&inputMemObj_fm_index);
   error_handler("Set arg 11 failure", ret);
-  ret = clSetKernelArg(kernel, 11, sizeof(cl_mem), (void *)&inputMemObj_fm_index);
-  error_handler("Set arg 12 failure", ret);
 
-  clock_t begin1 = clock();
+
+  
 
   /* enqueue and execute */
   const size_t globalWorkSize = WARP_COUNT*32;
@@ -501,9 +499,10 @@ if (save)
     printf("%d rozsahy su : %u %u\n",i,results[i],results[i+1]);
 
   }*/
-  approximate_search_gpu(patterns_batch, results, 64, WARP_COUNT);
+  count = approximate_search_gpu(patterns_batch, results, 64, WARP_COUNT);
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
+  printf("Total aligned reads: %d\n",count);
   printf("It took %lf seconds\n", time_spent1);
 
   }
