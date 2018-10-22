@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "FMindex.h"
-#include "compression.h"
+#include "wavelet_tree.h"
 #include <time.h>
 
 
