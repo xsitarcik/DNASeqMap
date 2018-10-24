@@ -5,20 +5,16 @@
 #include "bwt.h"
 #include "FMindex.h"
 #include <stdint.h>
-#include "compression.h"
-#include <CL/cl.h>
 
-#define DEVICE_GROUP_SIZE 32
-#define NUM_OF_READS_PER_WARP 1
-#define WARP_COUNT 1024
-#define MAX_SOURCE_SIZE 0x100000
 //MAIN PARAMETERS:
 //for constructing auxiliary tables of FM Index
 unsigned int sample_OCC_size = 2; //in reality it's *64, MUST SET TO 2
 unsigned int sample_SA_size = 32;
 unsigned char max_error = 1;
 unsigned int THRESHOLD = 500;
-
+unsigned int k_mers_permutation = 9;
+unsigned int total_kmers; //2^20 = 4^10
+unsigned int *kmers_hash;
 //>SRR493095.1 M00282:31:000000000-A0FFK:1:1:13945:1807 length=150
 
 
@@ -27,11 +23,11 @@ unsigned char load = 0;
 
 //program parameters
 unsigned char save = 0;
-unsigned char *save_name;
+char *save_name;
 
-unsigned char*filename_text;// = "alt_Celera_chr15.fa";
-unsigned char *load_name;// = "alt_Celera_chr15_bwt_withoutN.txt";
-unsigned char*filename_patterns;// = "SRR493095final.fasta";
+char*filename_text;// = "alt_Celera_chr15.fa";
+char *load_name;// = "alt_Celera_chr15_bwt_withoutN.txt";
+char*filename_patterns;// = "SRR493095final.fasta";
 //unsigned char*filename_patterns = "data/kratke_ready.fasta";
 
 unsigned int MAX_READ_LENGTH = 200;
@@ -43,12 +39,6 @@ unsigned char alphabet_size = 3; //indexing from 0 so -1
 unsigned char file_with_chunks = 1;
 unsigned int CHUNK_SIZE = 70;
 
-//for compression
-unsigned int block_size = 15000;
-unsigned char flag_compress = 0;
-unsigned char flag_runs = 7;
-unsigned char flag_mtf = 1;
-unsigned char flag_huffman = 1;
 
 unsigned char flag_wavelet_tree = 0;
 unsigned char flag_entries = 0;
@@ -62,14 +52,6 @@ unsigned char max_bits = sizeof(unsigned long long int)*8;
 unsigned char*genome;
 unsigned int*count_table;
 unsigned int*entries;
-
-
-void error_handler(char err[], int code) {
-  if(code != CL_SUCCESS) {
-    printf("%s, Error code:%d\n", err, code);
-    exit(EXIT_FAILURE);
-  }
-}
 
 int convert_string_to_int(char *string)
 {
@@ -111,7 +93,6 @@ int main ( int argc, char *argv[] )
  unsigned char c;
  unsigned int *bitvector_length;
  struct FMIndex *FM_index = NULL;
- struct compressedFMIndex *compressed_FM_index = NULL;
  unsigned int result_map;
 
 
@@ -149,24 +130,24 @@ for (i = 1; i<argc; i++)
 
   else if (strcmp(argv[i],"-r") == 0)
   {
-    filename_text = (char *) realloc (filename_text, sizeof(char) * strlen(argv[++i])+1);
+    filename_text = realloc (filename_text, sizeof(char) * strlen(argv[++i])+1);
     strcpy(filename_text, argv[i]);
   }
   else if (strcmp(argv[i],"-p") == 0)
   {
-    filename_patterns = (char *) realloc (filename_patterns,sizeof(char)*strlen(argv[++i])+1);
+    filename_patterns = realloc (filename_patterns,sizeof(char)*strlen(argv[++i])+1);
     strcpy(filename_patterns, argv[i]);
   }
   else if (strcmp(argv[i],"-i") == 0)
   {
     load = 1;
-    load_name = (char *) realloc (load_name, sizeof(char)*strlen(argv[++i])+1);
+    load_name = realloc (load_name, sizeof(char)*strlen(argv[++i])+1);
     strcpy(load_name, argv[i]);
   }
   else if (strcmp(argv[i],"-b") == 0)
   {
     save = 1;
-    save_name = (char *) realloc (save_name, sizeof(char)*strlen(argv[++i])+1);
+    save_name = realloc (save_name, sizeof(char)*strlen(argv[++i])+1);
     strcpy(save_name, argv[i]);
   }
 }
@@ -256,30 +237,7 @@ if (save)
  fclose(fp);
  }
 
- //build FMIndex using compression methods
- if (flag_compress)
- {
-  compressed_FM_index = build_compressed_FM_index(suffix_array,bwt,flag_mtf, flag_runs, flag_huffman, block_size);
-
-  /*int*result = approximate_search_in_compressed_FM_index(compressed_FM_index,"TAATCGGTGGGAGTATTCAACGTGATGAAGAC",flag_mtf,flag_runs,flag_huffman);
-  printf("results: %d %d\n",result[0],result[1]);
-  printf("ide sa na vypocet\n");
-  fflush(stdout);*/
-  
-  //freeing FM Index
-  for (i=0;i<compressed_FM_index->length;i++)
-  {
-   free(compressed_FM_index->array_of_blocks[i].occurences);
-   free(compressed_FM_index->array_of_blocks[i].bitvector);
-   free_huffman_tree(compressed_FM_index->array_of_blocks[i].huffman_tree);
-  }
-  free(compressed_FM_index->array_of_blocks);
-  free(compressed_FM_index->count_table);
-  free(compressed_FM_index->sampleSA);
-  free(compressed_FM_index);
-}
-
- else if (flag_wavelet_tree){
+if (flag_wavelet_tree){
 
   //build FM Index with WT for backward search
   FM_index_WT = build_FM_index_WT(suffix_array,bwt);
@@ -357,158 +315,6 @@ if (save)
 
   rebuild_FM_index_into_entries(suffix_array,bwt);
 
-  if (flag_use_gpu)
-  {
-
-    char *patterns_batch = (char *) malloc (sizeof(char) * (WARP_COUNT * NUM_OF_READS_PER_WARP * 64 + 1));
-    i = 0;
-    char header[256];
-    clock_t begin1 = clock();
-    while (i != (WARP_COUNT*NUM_OF_READS_PER_WARP))
-    {
-      fgets(header,70,fh_patterns);
-      fgets(&patterns_batch[i*64], 70, fh_patterns); //header of pattern
-      i++;
-    }
-
-    patterns_batch[WARP_COUNT * NUM_OF_READS_PER_WARP * 64] = '\0';
-
-/* define platform */
-  cl_platform_id platformID;
-  ret = clGetPlatformIDs(1, &platformID, NULL);
-  error_handler("Get platform error", ret); 
-
-  cl_device_id deviceID;
-  ret = clGetDeviceIDs(platformID, CL_DEVICE_TYPE_GPU, 1, &deviceID, NULL);
-  error_handler("Get deviceID error", ret);
-
-  cl_char vendorName[1024] = {0};
-  cl_char deviceName[1024] = {0};
-  ret = clGetDeviceInfo(deviceID, CL_DEVICE_VENDOR, sizeof(vendorName), vendorName, NULL);
-  ret = clGetDeviceInfo(deviceID, CL_DEVICE_NAME, sizeof(deviceName), deviceName, NULL);
-  printf("Connecting to %s %s...\n", vendorName, deviceName);
-
-  /* define context */
-  cl_context context;
-  context = clCreateContext(NULL, 1, &deviceID, NULL, NULL, &ret);
-  error_handler("define context error", ret);
-
-  /* define command queue */
-  cl_command_queue commandQueue;
-  commandQueue = clCreateCommandQueue(context, deviceID, 0, &ret);
-  error_handler("Create command queue error", ret);
-
-
-  /* create memory objects */
-  cl_mem inputMemObj;
-  inputMemObj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(char)*WARP_COUNT*NUM_OF_READS_PER_WARP*64, NULL, &ret);
-  error_handler("Create input buffer failed", ret);
-  ret = clEnqueueWriteBuffer(commandQueue, inputMemObj, CL_TRUE, 0, sizeof(char)*WARP_COUNT*NUM_OF_READS_PER_WARP*64, (const void*)patterns_batch, 0, NULL, NULL);
-  error_handler("Write to input buffer failed", ret);
-
-  /* create memory objects */
-  cl_mem inputMemObj_count_table;
-  inputMemObj_count_table = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned int)*(alphabet_size+2), NULL, &ret);
-  error_handler("Create input buffer failed", ret);
-  ret = clEnqueueWriteBuffer(commandQueue, inputMemObj_count_table, CL_TRUE, 0, sizeof(unsigned int)*(alphabet_size+2), (const void*)count_table, 0, NULL, NULL);
-  error_handler("Write to input buffer failed", ret);
-
-  cl_mem inputMemObj_fm_index;
-  inputMemObj_fm_index = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(unsigned int)*((genome_length+255) / 256 * 32), NULL, &ret);
-  error_handler("Create input buffer failed", ret);
-  ret = clEnqueueWriteBuffer(commandQueue, inputMemObj_fm_index, CL_TRUE, 0, sizeof(unsigned int)*((genome_length+255) / 256 * 32), (void*)entries, 0, NULL, NULL);
-  error_handler("Write to input buffer failed", ret);
-
-  // output need only be an array of inputSize / DEVICE_GROUP_SIZE long
-  cl_mem outputMemObj;
-  outputMemObj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(unsigned int)*WARP_COUNT*NUM_OF_READS_PER_WARP*4, NULL, &ret);
-  error_handler("Create output buffer failed", ret);
-
-  /* read kernel file from source */
-  char fileName[] = "./sum.cl";
-  char *sourceStr;  
-  size_t sourceSize;
-
-  FILE *file_source = fopen(fileName, "r");
-  if(!file_source) {
-    puts("Failed to load kernel file");
-    exit(EXIT_FAILURE);
-  }
-  sourceStr = (char*)malloc(MAX_SOURCE_SIZE);
-  sourceSize = fread(sourceStr, 1, MAX_SOURCE_SIZE, file_source);
-  fclose(file_source);
-
-
-  /* create program object */
-  cl_program program = clCreateProgramWithSource(context, 1, (const char**)&sourceStr, (const size_t*)&sourceSize, &ret); 
-  error_handler("create program failure", ret);
-  ret = clBuildProgram(program, 1, &deviceID, "-cl-mad-enable", NULL, NULL);
-  if(ret != CL_SUCCESS) {
-    puts("Build program error");
-    size_t len;
-    char buildLog[2048];
-    clGetProgramBuildInfo(program, deviceID, CL_PROGRAM_BUILD_LOG, sizeof(buildLog), buildLog, &len);
-    printf("%s\n", buildLog);
-  }
-
-  /* create kernel */
-  cl_kernel kernel = clCreateKernel(program, "sum", &ret);
-  error_handler("Create kernel failure", ret);
-
-  unsigned int PATTERN_LENGTH = 64;
-  /* set kernel arguments */
-  ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&inputMemObj);
-  error_handler("Set arg 1 failure", ret);
-  ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&outputMemObj);
-  error_handler("Set arg 2 failure", ret);
-  ret = clSetKernelArg(kernel, 2, sizeof(int), (void *)&PATTERN_LENGTH);
-  error_handler("Set arg 3 failure", ret);
-  ret = clSetKernelArg(kernel, 3, sizeof(unsigned int) * 2 * NUM_OF_READS_PER_WARP, NULL);
-  error_handler("Set arg 4 failure", ret);
-  ret = clSetKernelArg(kernel, 4, sizeof(cl_mem), (void *)&inputMemObj_count_table);
-  error_handler("Set arg 5 failure", ret);
-  ret = clSetKernelArg(kernel, 5, sizeof(unsigned int) * 5, NULL);
-  error_handler("Set arg 6 failure", ret);
-  ret = clSetKernelArg(kernel, 6, sizeof(char) * NUM_OF_READS_PER_WARP * PATTERN_LENGTH, NULL);
-  error_handler("Set arg 7 failure", ret);
-  ret = clSetKernelArg(kernel, 7, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //fm_index entry
-  error_handler("Set arg 8 failure", ret);
-  ret = clSetKernelArg(kernel, 8, sizeof(unsigned int) * DEVICE_GROUP_SIZE * 2, NULL); //count_table_results
-  error_handler("Set arg 9 failure", ret);
-  ret = clSetKernelArg(kernel, 9, sizeof(unsigned int) * DEVICE_GROUP_SIZE, NULL); //bitcounts
-  error_handler("Set arg 10 failure", ret);
-  ret = clSetKernelArg(kernel, 10, sizeof(cl_mem), (void *)&inputMemObj_fm_index);
-  error_handler("Set arg 11 failure", ret);
-
-
-  
-
-  /* enqueue and execute */
-  const size_t globalWorkSize = WARP_COUNT*32;
-  const size_t localWorkSize = DEVICE_GROUP_SIZE;
-  ret = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, &globalWorkSize, &localWorkSize, 0, NULL, NULL);
-  error_handler("Enqueue/execute failure", ret);
-
-  unsigned int * results = (unsigned int*) malloc(sizeof(unsigned int)*NUM_OF_READS_PER_WARP*WARP_COUNT*4);
-
-  ret = clEnqueueReadBuffer(commandQueue, outputMemObj, CL_TRUE, 0, sizeof(unsigned int)*NUM_OF_READS_PER_WARP*WARP_COUNT*4, results, 0, NULL, NULL);
-  error_handler("Read output buffer fail", ret);
-
-  /*for (i = 0; i<NUM_OF_READS_PER_WARP*WARP_COUNT*2;i++,i++)
-  {
-    printf("%d rozsahy su : %u %u\n",i,results[i],results[i+1]);
-
-  }*/
-  count = approximate_search_gpu(patterns_batch, results, 64, WARP_COUNT);
-  clock_t end1 = clock();
-  double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
-  printf("Total aligned reads: %d\n",count);
-  printf("It took %lf seconds\n", time_spent1);
-
-  }
-
-  else
-  {
   unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
   if (result == NULL)
   {
@@ -544,12 +350,9 @@ if (save)
 
     }
    if (o)
+   //if (k > 2500000)
     break;
-  
-   /*for (i=0;i<3;i++) CTCAGCTTAGGACCCGACTAACCCAGAGCGGACGAGCCTTCCTCTGGAAACCTTAGTCAATCGGTGGACG
-   {
-    fgets(&pattern[i*READS_CHUNK], READS_CHUNK+2, fh_patterns );
-   }*/
+   
    pattern[strlen(pattern)-1]='\0';
    k++;
    if (strchr(pattern,'N')==NULL)
@@ -571,33 +374,12 @@ if (save)
   printf("It took %lf seconds\n", time_spent1);
   printf("Total aligned reads: %d\n",count);
   printf("Total reads: %d\n",k);
-  }
+  
  }
  else 
  {
   printf("You need to specify -g -w or -n\n");
-  exit(-1);
-  FM_index = build_FM_index(suffix_array,bwt);
-  
-  //print_info_fm_index(FM_index);
-  int*result = approximate_search(FM_index,"TYYASI");
-  printf("results: %d %d\n",result[0],result[1]);
-  while (result[0]<result[1])
-  {
-   printf("sa value %d je %d\n",result[0],get_SA_value(result[0],FM_index->bwt[result[0]],FM_index));
-   result[0]++;
+  exit(-1);  
   }
-  free(FM_index->sampleSA);
-  free(FM_index->count_table);
-  for (i=0;i<strlen(alphabet);i++)
-   free(FM_index->occurence_table[i]);
-  free(FM_index->occurence_table);
-  free(FM_index->bwt);
-  free(FM_index);
- }
- //app matching:
- //int*result = approximate_search(2,FM_index,"ACGAAACGATT");
- //align("TGTTAC","GGTTGAC", 2);
-
 return 0;
 }

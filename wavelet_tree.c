@@ -1,4 +1,18 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "wavelet_tree.h"
 
+struct wavelet_tree *build_huffman_shaped_WT(unsigned char *s, unsigned int *frequencies)
+{
+ //build huffman tree of alphabet
+ struct huffman_node*root = build_huffman_tree((unsigned char *)alphabet,frequencies,strlen(alphabet));
+
+ //build wavelet tree recursively from root
+ struct wavelet_tree *wt_root = build_WT_node(root,s);
+ 
+ return wt_root;
+}
 
 //build wavelet tree node and its children
 struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s)
@@ -21,7 +35,7 @@ struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s)
  printf("coding as 0: %s, ",left_alphabet);
  for (i=0;i<genome_length;i++)
  {
-  if (in_alphabet(s[i],right_alphabet))
+  if (in_alphabet(s[i],(char *)right_alphabet))
   {
     //zakoduj ako 1
     //printf("1");
@@ -29,7 +43,7 @@ struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s)
     bitvector[word_index] = bitvector[word_index] + 1;
     bit_index++;
   }
-  else if (in_alphabet(s[i],left_alphabet))
+  else if (in_alphabet(s[i],(char *)left_alphabet))
   {
     //zakoduj ako 0
     //printf("0");
@@ -92,7 +106,7 @@ else return 0;
  //printf("WTF %c, position je %d\n",c,position);
 //fflush(stdout);
  //ak sa znak nachadza v lavej abecede spocitaju sa nuly inac 1
- if (in_alphabet(c,root->left_alphabet))
+ if (in_alphabet(c,(char *)root->left_alphabet))
  {
   //printf("pocitam 0 %c do pozicie %d\n",c,position);
   count = count_unset_bits(root->bitvector,position,root->bitcount_table);
@@ -116,7 +130,7 @@ unsigned char wt_access(unsigned int position, struct wavelet_tree *root)
  {
   //printf("pristupujem R pos %d, %d %d %llu, %d \n",position,word_index,bit_index,current->bitvector[word_index],get_bit(current->bitvector[word_index],bit_index));
   //check if current node is leaf, therefore coded alphabet is only one character
-   if (strlen(root->right_alphabet)==1)
+   if (strlen((char *)root->right_alphabet)==1)
   {
     return root->right_alphabet[0];
   }
@@ -132,7 +146,7 @@ unsigned char wt_access(unsigned int position, struct wavelet_tree *root)
   //printf("pristupujem L pos%d, %d %d %llu, %d \n",position,word_index,bit_index,current->bitvector[word_index],get_bit(current->bitvector[word_index],bit_index));
   
   //check if current node is leaf, therefore coded alphabet is only one character
-  if (strlen(root->left_alphabet)==1)
+  if (strlen((char *)root->left_alphabet)==1)
   {
    return root->left_alphabet[0];
   }
@@ -289,6 +303,127 @@ unsigned char *bit_pack (char *s, unsigned int string_length, unsigned char bits
  return bitvector;
 }
 
+
+//help function which checks if input character is in input alphabet
+unsigned char in_alphabet(unsigned char c, char *alphabet)
+{
+ unsigned char i;
+ for (i=0;i<strlen(alphabet);i++){
+  if (alphabet[i]==c)
+    return 1;
+ }
+ return 0;
+}
+
+
+struct huffman_node *build_huffman_tree(unsigned char*alphabet,unsigned int*freq, unsigned char alphabet_length)
+{
+ struct huffman_node ** heap = build_min_heap(alphabet,freq,alphabet_length);
+ struct huffman_node *left_node;
+ struct huffman_node *right_node;
+ struct huffman_node *root_node;
+ struct huffman_node *current;
+ unsigned int i = 0;
+ unsigned int j = 0;
+ unsigned int k;
+ int size = alphabet_length;
+ 
+ unsigned int huffman_tree_size = size+size-1;
+ while (size>1)
+ {
+ //extract 2 min frequencies from heap
+ left_node = get_root(heap,size);
+ //printf("extrahovali sme %d %c\n",left_node->freq,left_node->symbol);
+ size--;
+ if (size!=0)
+ {
+  right_node = get_root(heap,size);
+  size--;
+ }
+ else
+ {
+  right_node = heap[0];
+  size--;
+ }
+//printf("extrahovali sme %d %c\n",right_node->freq,right_node->symbol);
+ //add extracted frequencies and its sum to huffman tree
+ //add to heap sum of extracted roots of minheap
+ root_node = create_new_node('a',left_node->freq+right_node->freq);
+ root_node->left = left_node;
+ root_node->right = right_node;
+ heap[size] = root_node;
+ size++;
+ }
+ return root_node;
+}
+
+struct huffman_node *get_root(struct huffman_node **heap, unsigned int size)
+{
+    struct huffman_node* temp = heap[0];
+    heap[0] = heap[size-1];
+    heapify(heap, 0, size-1);
+    return temp;
+}
+
+void heapify(struct huffman_node **heap, unsigned int index, unsigned int size)
+{
+ unsigned int left_child = index*2+1;
+ unsigned int right_child = index*2+2;
+ unsigned int min = index;
+ struct huffman_node*swap;
+
+ if (left_child<size && heap[left_child]->freq < heap[index]->freq)
+  min = left_child;
+ if (right_child<size && heap[right_child]->freq < heap[index]->freq)
+  min = right_child;
+ 
+ if (min != index)
+ {
+  swap = heap[min];
+  heap[min] = heap[index];
+  heap[index] = swap;
+  heapify(heap,index,size);
+ }
+}
+
+struct huffman_node *create_new_node(unsigned char c, unsigned int freq)
+{
+ struct huffman_node * current = (struct huffman_node *) malloc(sizeof(struct huffman_node));
+ current->symbol = c;
+ current->freq = freq;
+ current->left = NULL;
+ current->right = NULL;
+ current->visited = 0;
+ return current;
+}
+
+struct huffman_node **build_min_heap(unsigned char*alphabet, unsigned int*freq, unsigned int alphabet_length)
+{
+ int i;
+ struct huffman_node ** heap = (struct huffman_node **) malloc(sizeof(struct huffman_node*)*alphabet_length);
+
+ for (i=0;i<alphabet_length;i++)
+ {
+  heap[i] = create_new_node(alphabet[i],freq[i]);
+ }
+ /*for (i=0;i<alphabet_length;i++)
+ {
+  printf("%d=%d\n",heap[i]->freq,heap[i]->symbol);
+ }
+ printf("\n");*/
+ for (i=alphabet_length/2;i>=0;i--)
+ {
+  heapify(heap,i,alphabet_length);
+ }
+/*for (i=0;i<alphabet_length;i++)
+ {
+  printf("%d=%d\n",heap[i]->freq,heap[i]->symbol);
+ }
+ printf("\n");*/
+
+ return heap;
+}
+
 //function which returns alphabet which is coded in selected node of wavelet tree
 unsigned char *get_alphabet(struct huffman_node*node)
 {
@@ -310,8 +445,8 @@ unsigned char *get_alphabet(struct huffman_node*node)
  {
     left_alphabet = get_alphabet(node->left);
     right_alphabet = get_alphabet(node->right);
-    const size_t left_alphabet_size = strlen(left_alphabet);
-    const size_t right_alphabet_size = strlen(right_alphabet);
+    const size_t left_alphabet_size = strlen((char *)left_alphabet);
+    const size_t right_alphabet_size = strlen((char *)right_alphabet);
 
     alphabet = (unsigned char *)malloc(left_alphabet_size+right_alphabet_size+2);
 
@@ -321,15 +456,4 @@ unsigned char *get_alphabet(struct huffman_node*node)
   free(right_alphabet);
  }
  return alphabet;
-}
-
-//help function which checks if input character is in input alphabet
-unsigned char in_alphabet(unsigned char c, unsigned char *alphabet)
-{
- unsigned char i;
- for (i=0;i<strlen(alphabet);i++){
-  if (alphabet[i]==c)
-    return 1;
- }
- return 0;
 }

@@ -4,9 +4,9 @@
 #include "bwt.h"
 
 //auxiliary method for loading genome from file by chunks with newlines
-unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, unsigned char*file,unsigned int*genome_length){
+unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, char*file,unsigned int*genome_length){
   unsigned char *buffer = (unsigned char *)malloc(sizeof(unsigned char)*chunk_size);
-  unsigned char nazovTextu[250];
+  char nazovTextu[250];
   unsigned char *s = NULL;
   unsigned int sum = 0;
 
@@ -54,7 +54,7 @@ unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, unsigne
 }
 
 //auxiliary method for loading genome from file
-unsigned char*load_genome_from_file(unsigned char*file,unsigned int*genome_length)
+unsigned char*load_genome_from_file( char*file,unsigned int*genome_length)
 {
 unsigned char * buffer;
 unsigned int length;
@@ -78,7 +78,7 @@ if (f)
 }
 
 //procedura na zotriedenie a zlucenie casti
-void topDownMerge(char *s,unsigned int *positions, unsigned int begin, unsigned int mid, unsigned int end, unsigned int *pomocnePole, unsigned int length){
+void topDownMerge(unsigned char *s,unsigned int *positions, unsigned int begin, unsigned int mid, unsigned int end, unsigned int *pomocnePole, unsigned int length){
   unsigned int i = begin,j = mid,k;
   //printf("wat2 %d %d\n",begin,end);
   for (k = begin; k < end; k++) {
@@ -95,7 +95,7 @@ void topDownMerge(char *s,unsigned int *positions, unsigned int begin, unsigned 
 
 //procedura na rozdelenie na dve casti, ktore sa zotriedia a zlucia
 //vyuzitie openMP, vytvorenie paralelnej sekcie pre kazde rozdelenie
-void topDownSplitMerge (char *s,unsigned int *positions, unsigned int begin, unsigned int end, unsigned int *pomocnePole, unsigned int length){
+void topDownSplitMerge (unsigned char *s,unsigned int *positions, unsigned int begin, unsigned int end, unsigned int *pomocnePole, unsigned int length){
   unsigned int mid;
   //printf("wat %d %d\n",begin,end);
   if ((end - begin) < 2)
@@ -123,7 +123,7 @@ void copyArr(unsigned int src[], unsigned int begin, unsigned int end, unsigned 
 }
 
 //procedura na triedenie zlucovanim
-void mergeSort(char*s,unsigned int *positions,unsigned int size){
+void mergeSort(unsigned char*s,unsigned int *positions,unsigned int size){
   unsigned int *pomocnePole = (unsigned int*)malloc(size*sizeof(unsigned int));
   //omp_set_num_threads(2);
   topDownSplitMerge(s,positions, 0, size, pomocnePole,size);
@@ -262,7 +262,7 @@ void reverse_string(unsigned char *str)
 
     //get start and end pointers
     unsigned char *start = str;
-    unsigned char *end = start + strlen(str) - 1;
+    unsigned char *end = start + strlen((char *)str) - 1;
     unsigned char temp;
 
     //reverse chars in cycle from start and end
@@ -380,7 +380,7 @@ unsigned int *insertion_sort_array(unsigned int *suffix_array, unsigned char *s,
 
 //inicializovanie pola positions, kazda hodnota urcuje zaciatocnu poziciu rotacie
 //nasledne zotriedenie tohto pola, pricom sa porovnavaju rotacie retazca zacinajuce na tychto poziciach
-unsigned int * mergesort_SA(unsigned int *suffix_array, char *s, unsigned int length){
+unsigned int * mergesort_SA(unsigned int *suffix_array, unsigned char *s, unsigned int length){
   mergeSort(s,suffix_array,length);
   return suffix_array;
 }

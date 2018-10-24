@@ -6,7 +6,6 @@
 #include <time.h>
 
 
-
 //create FM Index which uses wavelet tree to compress BWT string
 struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *bwt)
 {
@@ -43,75 +42,6 @@ struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *b
  return FM_index_WT;
 }
 
-//create base FM Index
-struct FMIndex*build_FM_index(unsigned int *suffix_array, unsigned char *bwt)
-{
- unsigned char bits_per_char = get_min_bits_per_char(alphabet);
- struct FMIndex *FM_index = (struct FMIndex*) malloc(sizeof(struct FMIndex));
- FM_index->bwt = bwt;
- FM_index->alphabet = alphabet;
- FM_index->end = find_end(suffix_array);
- FM_index->sampleSA = create_sample_SA(suffix_array);
- free(suffix_array);
- FM_index->count_table = create_count_table(bwt);
- FM_index->occurence_table = create_occurence_table(bwt,alphabet);
- FM_index->alphabetically_encoded  = 0;
- alphabet_encode(FM_index->bwt,alphabet,genome_length);
- FM_index->alphabetically_encoded = 1;
-
- return FM_index;
-}
-
-//create FM Index using compressed BWT by MTF,RLE,Huffman
-struct compressedFMIndex*build_compressed_FM_index(unsigned int *suffix_array, unsigned char *bwt, 
-  unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned int block_size)
-{
- int i, count=0;
- struct compressedFMIndex *compressed_FM_index = (struct compressedFMIndex*) malloc(sizeof(struct compressedFMIndex));
- compressed_FM_index->block_size = block_size;
- compressed_FM_index->alphabet = alphabet;
- compressed_FM_index->flag_mtf = flag_mtf;
- compressed_FM_index->flag_runs = flag_runs;
- compressed_FM_index->flag_huffman = flag_huffman;
- compressed_FM_index->length = genome_length;
- compressed_FM_index->end = find_end(suffix_array);
- compressed_FM_index->sampleSA = create_sample_SA(suffix_array);
- free(suffix_array);
- compressed_FM_index->count_table = create_count_table(bwt);
-
- clock_t begin = clock();
- compressed_FM_index->array_of_blocks = compress_FMIndex(block_size,flag_mtf,flag_runs,flag_huffman,alphabet,bwt,&compressed_FM_index->length);
- clock_t end = clock();
- double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
- printf("trvanie kompresie: %lf", time_spent);
- printf("pocet blkov je %d\n",compressed_FM_index->length);
- fflush(stdout);
- 
- //huffman_decode(compressed_FM_index->array_of_blocks[0].bitvector,compressed_FM_index->array_of_blocks[0].huffman_tree,compressed_FM_index->array_of_blocks[0].block_size);
- /*count_occ_in_compressed_FMIndex(38, 'G',compressed_FM_index);
- count_occ_in_compressed_FMIndex(39, 'G',compressed_FM_index);
- count_occ_in_compressed_FMIndex(40, 'G',compressed_FM_index);
- count_occ_in_compressed_FMIndex(41, 'G',compressed_FM_index);*/
- //printf("vysledok je %d",get_SA_value_compressed(1, genome_length, sample_SA_size, alphabet, 
-  //compressed_FM_index->sampleSA,compressed_FM_index->count_table,compressed_FM_index->block_size, compressed_FM_index->array_of_blocks, flag_mtf, flag_runs, flag_huffman));
- //search_pattern_in_compressed_FM_index(compressed_FM_index, "GTTA",flag_mtf, flag_runs, flag_huffman);
- 
- /*clock_t begin2 = clock();
- unsigned char *dcp = decompress_FMIndex(compressed_FM_index);
- clock_t end2 = clock();
- double time_spent2 = (double)(end2 - begin2) / CLOCKS_PER_SEC;
- printf("trvanie DEkompresie: %lf", time_spent2);
-
- printf("DEcompression succesful\n");
- */
- 
- for (i=0;i<=compressed_FM_index->length;i++){
-  count = count + (compressed_FM_index->array_of_blocks[i].bitvector_length+7)/8;
-  printf("bitvector length of %d block is %d\n",i,compressed_FM_index->array_of_blocks[i].bitvector_length);
- }
- printf("bwt is stored in %d bytes, and has %d characters\n",count,genome_length);
- return compressed_FM_index;
-}
 
 //find "end" of BWT string, it means position of zero rotation in BWT
 unsigned int find_end(unsigned int *suffix_array)
@@ -145,54 +75,6 @@ unsigned int *create_sample_SA(unsigned int *suffix_array)
 
 //procedure to get from sample suffix array  SA value corresponding to BWT position
 //when input position not in sample suffix array, use LFmapping until returned position in sample suffix array
-unsigned int get_SA_value(unsigned int bwt_position, unsigned char c, struct FMIndex *fm_index)
-{
- unsigned int count = 0;
- unsigned char character;
- if (fm_index->alphabetically_encoded)
-  character = c;
- else
-  character = get_alphabet_index(fm_index->alphabet,c);
- while(bwt_position%sample_SA_size!=0)
- {
-  c = fm_index->bwt[bwt_position];
-  bwt_position = last_to_first_encoded(c, bwt_position, fm_index->alphabet,fm_index->count_table,fm_index->bwt,fm_index->occurence_table);
-  count++;
- }
- unsigned int result = fm_index->sampleSA[bwt_position/sample_SA_size]+count;
- if (result>genome_length)
-  result = result - genome_length;
- return result;
-}
-
-//get original position from position in BWT
-unsigned int get_SA_value_compressed(unsigned int bwt_position, unsigned int length, unsigned char *alphabet, unsigned int*sampleSA, 
-  unsigned int *count_table,unsigned int block_size, struct compressed_block*block, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
-{
- unsigned int count = 0;
- unsigned int index = bwt_position/block_size;
- unsigned int position;
- unsigned char c;
-
- //until position of stored SA value is found, keep LFmapping position
- while(bwt_position%sample_SA_size!=0)
- {
-  position = bwt_position - index*block_size;
-  unsigned char *bwt = decompress_block(block[index].bitvector_length,block[index].bitvector,flag_mtf,flag_runs,flag_huffman,position+1,alphabet,block[index].huffman_tree);
-  c = bwt[position];
-  free(bwt);
-  bwt_position = last_to_first_in_compressed_FMIndex(c,bwt_position,alphabet,count_table,block, block_size, flag_mtf,flag_runs,flag_huffman);
-  index = bwt_position/block_size;
-  count++;
- }
- unsigned int result = sampleSA[bwt_position/sample_SA_size]+count;
- if (result>=length)
-  result = result - length;
- return result;
-}
-
-//procedure to get from sample suffix array  SA value corresponding to BWT position
-//when input position not in sample suffix array, use LFmapping until returned position in sample suffix array
 unsigned int get_SA_value_WT(unsigned int bwt_position)
 {
  unsigned int count = 0;
@@ -210,26 +92,10 @@ unsigned int get_SA_value_WT(unsigned int bwt_position)
 }
 
 //procedure of LF-mapping
-unsigned int last_to_first(unsigned char c, unsigned int bwt_position, unsigned char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table)
+unsigned int last_to_first(unsigned char c, unsigned int bwt_position, char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table)
 {
  unsigned char character = get_alphabet_index(alphabet,c);
  unsigned int last = count_table[character] + count_occ(bwt,occurence_table,bwt_position,c,character);
- return last;
-}
-
-//procedure of LF-mapping in compressed BWT
-unsigned int last_to_first_in_compressed_FMIndex(unsigned char c, unsigned int bwt_position, unsigned char*alphabet, unsigned int* count_table,struct compressed_block *block, unsigned int block_size, 
-  unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
-{
- unsigned int character = get_alphabet_index(alphabet,c);
- unsigned int last = count_table[character] + count_occ_in_compressed_FMIndex(block,block_size,bwt_position,c,flag_mtf, flag_runs, flag_huffman, alphabet);
- return last;
-}
-
-//procedure of LF-mapping in BWT string encoded to indexes in alphabet
-unsigned int last_to_first_encoded(unsigned char c, unsigned int bwt_position, unsigned char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table)
-{
- unsigned int last = count_table[c] + count_occ(bwt,occurence_table,bwt_position,c,c);
  return last;
 }
 
@@ -272,7 +138,7 @@ unsigned int *create_count_table(unsigned char *s)
 }
 
 //procedure which creates sampled 2D occurence table for input string and alphabet
-unsigned int **create_occurence_table(unsigned char *s, unsigned char *alphabet)
+unsigned int **create_occurence_table(unsigned char *s)
 {
  unsigned int alphabet_size = strlen(alphabet);
  unsigned int samples_count = (genome_length+sample_OCC_size)/sample_OCC_size;
@@ -327,261 +193,10 @@ unsigned int count_occ(unsigned char *s, unsigned int **occurence_table, unsigne
 return occurence_table[character][position/sample_OCC_size]+count;
 }
 
-//procedure of FM Index for getting count of occurences of char c upto input position when BWT is compressed in blocks
-unsigned int count_occ_in_block(struct compressed_block *block, unsigned int position,unsigned char c,unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned char*alphabet)
-{
- unsigned int i;
- unsigned int count = 0;
- unsigned int alphabet_index = get_alphabet_index(alphabet,c);
- unsigned int occurences = block->occurences[alphabet_index];
- unsigned char *bwt = decompress_block(block->bitvector_length,block->bitvector,flag_mtf,flag_runs,flag_huffman,position,alphabet,block->huffman_tree);
- for (i=0;i<position;i++)
-  if (bwt[i] == c)
-    count++;
- free(bwt);
- return (occurences+count);
-}
-
-unsigned int count_occ_in_compressed_FMIndex(struct compressed_block *block, unsigned int block_size, unsigned int position, unsigned char c, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman, unsigned char*alphabet)
-{
- unsigned int index = position/block_size;
- unsigned int remainder = position - index*block_size; //faster than modulo ?
- return count_occ_in_block(&block[index],remainder,c,flag_mtf, flag_runs, flag_huffman, alphabet);
-}
-
-unsigned int count_occ_in_decompressed_FMIndex(struct compressed_block *block, unsigned char*bwt,unsigned int block_size, unsigned int position, unsigned char c, unsigned char*alphabet)
-{
-  unsigned int index = position/block_size;
-  unsigned int start = index*block_size;
-  int count = 0;
-  while (start<position)
-  {
-    if (bwt[start]==c)
-      count++;
-    start++;
-  }
-  if (bwt[position]==c)
-      count++;
-  unsigned char a = get_alphabet_index(alphabet,c);
-  return (block[index].occurences[a]+count);
-}
-
-//procedur which inplace decompresses BWT of FM Index
-unsigned char *decompress_FMIndex(struct compressedFMIndex *compressed_FM_index)
-{
- unsigned int i, index = 0;
- unsigned char *decompressed = NULL;
- unsigned char*alphabet = compressed_FM_index->alphabet;
- unsigned char flag_mtf = compressed_FM_index->flag_mtf;
- unsigned char flag_runs = compressed_FM_index->flag_runs;
- unsigned char flag_huffman = compressed_FM_index->flag_huffman;
- unsigned int block_size = compressed_FM_index->block_size;
- struct compressed_block *cb = NULL;
- unsigned char *bwt = (unsigned char*) malloc (1);
- for (i=0;i<=compressed_FM_index->length;i++)
- {
-  cb = &compressed_FM_index->array_of_blocks[i];
-  decompressed = decompress_block(cb->bitvector_length, cb->bitvector, flag_mtf, flag_runs, flag_huffman, cb->block_size, alphabet, cb->huffman_tree);
-  bwt = (unsigned char *) realloc(bwt,index+cb->block_size+1);
-  strncpy(&bwt[index],decompressed,cb->block_size);
-  free(decompressed);
-  index = index + cb->block_size;
- free(compressed_FM_index->array_of_blocks[i].bitvector); 
- }
- bwt[index]='\0';
- return 0;
-}
-
-//procedure used for reversing BWT which is compressed
-/*unsigned char* reverseBWT_compressed(unsigned char*bwt, unsigned int end, unsigned int* count_table, unsigned char*alphabet, 
-  unsigned int block_size, struct compressed_block *block, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
-{
-  unsigned wow = end;
- unsigned int i=0;
- unsigned int j = genome_length-1;
- unsigned char a;
- unsigned char character;
- unsigned char *reversed = (unsigned char *)malloc(genome_length);
- if (reversed==NULL)
- {
-  printf("Error. No memory when allocating memory when reversing string\n");
-  exit(1);
- }
- while(i++!=genome_length)
- {
-  a = bwt[end];
-  reversed[j] = a;
-  j--;
-  //printf("end=%d,a je %d=%c\n",end,a,a);
-  character = get_alphabet_index(alphabet,a);
-  //printf("pricom %d + %d\n",count_table[character],count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet));
-  end = count_table[character]-1 + count_occ_in_decompressed_FMIndex(block,bwt,block_size,end,a,alphabet);
-  if (end>genome_length){
-    //printf("end je %d, length je %d\n",end,length);
-    end = end - genome_length;
-  }
-  //printf("nova pozicia je %d\n",end);
- }
- reversed[genome_length]='\0';
- //printf("REVERSED JE\n%s\n",reversed);
- //free(bwt);
- return reversed;
-}*/
-
-//procedure which decode string of numbers to string of chars according to indexes of alphabet
-void alphabet_decode (unsigned char *s, unsigned char * alphabet)
-{
- unsigned int string_length = strlen(s);
- unsigned int i;
- for (i=0;i<string_length;i++)
- {
-  s[i] = alphabet[s[i]];
- }
-}
-
-//procedure used for reversing BWT
-unsigned char *reverseBWT(unsigned int end, unsigned char*alphabet,unsigned int*count_table,unsigned char*bwt, unsigned int**occurence_table, unsigned char alphabetically_encoded)
-{
- int i = 0;
- int j = genome_length -1;
- char a;
- char *reversed = (char *)malloc(sizeof(char)*genome_length);
- if (reversed==NULL)
- {
-  printf("Error. No memory when allocating memory when reversing string\n");
-  exit(1);
- }
- if (alphabetically_encoded == 0)
- {
-  while (i++!=genome_length)
-  {
-   a = bwt[end];
-   reversed[j] = a;
-   j--;
-   end = last_to_first(a,end,alphabet,count_table,bwt,occurence_table);
-  }
- }
- else
- {
-  while (i++!=genome_length)
-  {
-   a = bwt[end];
-   reversed[j] = a;
-   j--;
-   end = last_to_first_encoded(a,end,alphabet,count_table,bwt,occurence_table);
-  }
-  alphabet_decode(reversed,alphabet);
- }
-return reversed;
-}
-
 //aux. procedure for getting index of char in alphabet
 unsigned char get_alphabet_index(char *alphabet, unsigned char c)
 {
  return (unsigned int)(strchr(alphabet,c) - alphabet);
-}
-
-void print_occurence_table(struct FMIndex *fm_index)
-{
- int i,j;
- int alphabet_size = strlen(fm_index->alphabet);
- printf("Printing occurence table:\n");
- for (j=0;j<(genome_length+sample_OCC_size)/sample_OCC_size;j++)
- {
-  printf("%d: ",j*sample_OCC_size);
-  for (i=0;i<alphabet_size;i++)
-  {
-  printf("%d ",fm_index->occurence_table[i][j]);
-  }
-  printf("\n");
- }
-}
-
-void print_sample_SA(struct FMIndex *fm_index)
-{
- int i;
- int samples = (genome_length+sample_SA_size)/sample_SA_size;
- int *sample_SA = fm_index->sampleSA;
- printf("Printing sample suffix array:\n");
- for (i = 0; i<samples;i++)
-  printf("%d = %d\n",i*sample_SA_size,sample_SA[i]);
-}
-
-void print_count_table(struct FMIndex *fm_index)
-{
- unsigned int i = 0;
- printf("Printing count table: \n");
- for (i = 0; i<strlen(fm_index->alphabet); i++)
-  printf("%4c ",fm_index->alphabet[i]);
- printf("\n");
- for (i = 0; i<strlen(fm_index->alphabet); i++)
-  printf("%4d ",fm_index->count_table[i]);
- printf("\n");
-}
-
-void print_info_fm_index(struct FMIndex *fm_index)
-{
- printf("Length of BWT is: %d\n",genome_length);
- printf("Stored BWT is: %s--\n",fm_index->bwt);
- print_bit_vector(fm_index->bwt, fm_index->bitvector_length);
- printf("Reversed   is: %s--\n",reverseBWT(fm_index->end,fm_index->alphabet,fm_index->count_table,fm_index->bwt, fm_index->occurence_table,fm_index->alphabetically_encoded));
- print_count_table(fm_index);
- print_sample_SA(fm_index);
- print_occurence_table(fm_index);
-}
-
-//procedure for searching pattern in BWT of FM Index
-unsigned int*search_pattern(struct FMIndex *fm_index, char *pattern)
-{
- unsigned int*result=(unsigned int*)malloc(2*sizeof(unsigned int));
- unsigned int *count_table = fm_index->count_table;
- unsigned int pattern_length = strlen(pattern);
- int j = pattern_length - 1;
- int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
- result[0] = count_table[alphabet_index];
- if (alphabet_index!=alphabet_size)
-  result[1] = count_table[alphabet_index + 1]-1;
- else 
-  result[1] = genome_length-1;
- while (j>0 && result[0]<result[1])
- {
-  j--;
-  alphabet_index = get_alphabet_index(alphabet,pattern[j]);
-  result[0] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[0],alphabet_index,alphabet_index);
-  result[1] = count_table[alphabet_index] + count_occ(fm_index->bwt,fm_index->occurence_table,result[1],alphabet_index,alphabet_index);
-  }
- if (j>0 && result[0]>=result[1])
-  result[1]--;
- return result;
-}
-
-//procedure for searching pattern in compressed BWT of FM Index
-unsigned int*search_pattern_in_compressed_FM_index(struct compressedFMIndex *compressed_fm_index, char *pattern,unsigned char flag_mtf,unsigned char flag_runs, unsigned char flag_huffman)
-{
- unsigned int*result=(unsigned int*)malloc(2*sizeof(unsigned int));
- unsigned int *count_table = compressed_fm_index->count_table;
- unsigned int pattern_length = strlen(pattern);
- unsigned int block_size = compressed_fm_index->block_size;
- int j = pattern_length - 1;
- int alphabet_index = get_alphabet_index(alphabet,pattern[j]);
- result[0] = count_table[alphabet_index];
- if (alphabet_index!=alphabet_size)
-  result[1] = count_table[alphabet_index + 1]-1;
- else 
- {
-  result[1] = genome_length-1;
- }
- while (j>0 && result[0]<result[1])
- {
-  j--;
-  alphabet_index = get_alphabet_index(alphabet,pattern[j]);
-  
-  result[0] = count_table[alphabet_index] + count_occ_in_compressed_FMIndex(compressed_fm_index->array_of_blocks,block_size,result[0],pattern[j],flag_mtf,flag_runs,flag_huffman,alphabet);
-  result[1] = count_table[alphabet_index] + count_occ_in_compressed_FMIndex(compressed_fm_index->array_of_blocks,block_size,result[1],pattern[j],flag_mtf,flag_runs,flag_huffman,alphabet);
- }
- if (j>0 && result[0]>=result[1])
-  result[1]--;
- return result;
 }
 
 //procedure for searching pattern in compressed BWT of FM Index
@@ -611,62 +226,8 @@ unsigned char search_pattern_in_FM_index_WT(char *pattern, unsigned char current
  return j;
 }
 
-//procedure which breaks input pattern and search each separately in FM Index
-unsigned int*approximate_search(struct FMIndex *fm_index, unsigned char *pattern)
-{
- unsigned int pattern_length = strlen(pattern);
- unsigned int div_pattern_length = (pattern_length+1)/(max_error+1);
- unsigned int j;
- int i; 
- unsigned int *result;
- unsigned char *patterns[max_error+1];
- for (i=0;i<max_error;i++)
- {
-  patterns[i] = (unsigned char *)malloc(sizeof(unsigned char)*(div_pattern_length+1)); 
-  memcpy( patterns[i], &pattern[i*div_pattern_length], div_pattern_length);
-  patterns[i][div_pattern_length]= '\0';
- } 
- j = pattern_length-i*div_pattern_length;
- patterns[i] = (unsigned char *)malloc(sizeof(unsigned char)*(j+1)); 
- memcpy( patterns[i], &pattern[i*div_pattern_length], j);
- patterns[i][j]= '\0';
-
- for (i=max_error;i>=0;i--)
- {
-  result = search_pattern(fm_index,patterns[i]);
- }
-return result;
-}
-
-//procedure which breaks input pattern and search each separately in compressed FM index
-unsigned int*approximate_search_in_compressed_FM_index(struct compressedFMIndex *compressed_fm_index, unsigned char *pattern, unsigned char flag_mtf, unsigned char flag_runs, unsigned char flag_huffman)
-{
- unsigned int pattern_length = strlen(pattern);
- unsigned int div_pattern_length = (pattern_length+1)/(max_error+1);
- unsigned int j;
- int i; 
- unsigned int *result;
- unsigned char *patterns[max_error+1];
- for (i=0;i<max_error;i++)
- {
-  patterns[i] = (unsigned char *)malloc(sizeof(unsigned char)*(div_pattern_length+1)); 
-  memcpy( patterns[i], &pattern[i*div_pattern_length], div_pattern_length);
-  patterns[i][div_pattern_length]= '\0';
- } 
- j = pattern_length-i*div_pattern_length;
- patterns[i] = (unsigned char *)malloc(sizeof(unsigned char)*(j+1)); 
- memcpy( patterns[i], &pattern[i*div_pattern_length], j);
- patterns[i][j]= '\0';
-
- for (i=max_error;i>=0;i--)
- {
-  result = search_pattern_in_compressed_FM_index(compressed_fm_index,patterns[i],flag_mtf,flag_runs,flag_huffman);
- }
-return result;
-}
-
 //procedure which breaks input pattern and search each separately in FM index - Wavelet tree
-long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned int*result)
+long long int approximate_search_in_FM_index_WT(char *pattern, unsigned int*result)
 {
  unsigned int pattern_length = strlen(pattern);
  unsigned int k,temp, length,j;
@@ -675,7 +236,7 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
  char current_error = 0;
  
  //search last part of the pattern
- unsigned char searching_part[pattern_length];
+ char searching_part[pattern_length];
  unsigned int div_pattern_length = (pattern_length+1)/(max_error+1);
  unsigned int current_pattern_length = pattern_length;
 
@@ -717,7 +278,7 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
       }
       if (k<=max_error+1)
       {
-       unsigned char genome_test[pattern_length+2];
+       char genome_test[pattern_length+2];
        if (k>0)
        {
         memcpy(genome_test, &genome[temp], pattern_length+1);
@@ -740,114 +301,8 @@ long long int approximate_search_in_FM_index_WT(unsigned char *pattern, unsigned
 return 0;
 }
 
-long long int approximate_search_gpu(unsigned char *patterns, unsigned int *results, unsigned int pattern_length, unsigned int reads_count)
-{
-  unsigned int k,temp, i;
-  unsigned int current_pattern_start = 32;
-  unsigned char pattern_test[100];
-  unsigned int counter = 0;
-  char o = 0;
-
-  for (i = 0; i<reads_count*4;i++,i++)
-  {
-    o = 0;
-    if (results[i+1]-results[i]<THRESHOLD)
-    {
-      while (results[i]!=results[i+1])
-      {
-        temp = get_SA_value_entry(results[i]);
-        results[i]++;
-        if (temp>=current_pattern_start)
-        {
-          temp = temp - current_pattern_start;
-       
-          memcpy(pattern_test, &patterns[i/4*pattern_length], pattern_length);
-          pattern_test[pattern_length] = '\0';
-          k = 0;
-          while (genome[temp]!=pattern_test[0] && (k<=max_error+1))
-          {
-           temp++;
-           k++;
-          }
-          if (k<=max_error+1)
-          {
-           unsigned char genome_test[pattern_length+2];
-           if (k>0)
-           {
-            memcpy(genome_test, &genome[temp], pattern_length+1);
-            genome_test[pattern_length+1] = '\0';
-           }
-           else 
-           {
-            memcpy(genome_test, &genome[temp], pattern_length+1);
-            genome_test[pattern_length+1] = '\0';
-          }
-           if (align(pattern_test,genome_test))
-           {
-            counter++;
-            printf("%d-%s-\n",i,pattern_test);
-            printf("Approximate position: %u\n",temp);
-            o = 1;
-            break;
-           }
-          }
-        }
-      }
-    }
-
-    current_pattern_start = 0;
-    i++;i++;
-    if (o==0 && results[i+1]-results[i]<THRESHOLD)
-    {
-      while (results[i]!=results[i+1])
-      {
-        temp = get_SA_value_entry(results[i]);
-        results[i]++;
-        if (temp>=current_pattern_start)
-        {
-          temp = temp - current_pattern_start;
-       
-          memcpy(pattern_test, &patterns[i/4*pattern_length], pattern_length);
-          pattern_test[pattern_length] = '\0';
-          k = 0;
-          while (genome[temp]!=pattern_test[0] && (k<=max_error+1))
-          {
-           temp++;
-           k++;
-          }
-          if (k<=max_error+1)
-          {
-           unsigned char genome_test[pattern_length+2];
-           if (k>0)
-           {
-            memcpy(genome_test, &genome[temp], pattern_length+1);
-            genome_test[pattern_length+1] = '\0';
-           }
-           else 
-           {
-            memcpy(genome_test, &genome[temp], pattern_length+1);
-            genome_test[pattern_length+1] = '\0';
-          }
-           if (align(pattern_test,genome_test))
-           {
-            counter++;
-            printf("%d-%s-\n",i,pattern_test);
-            printf("Approximate position: %u\n",temp);
-            break;
-           }
-          }
-        }
-      }
-    }
-
-
-  }
-return counter;
-  
-
-}
 //procedure which breaks input pattern and search each separately in FM index - Wavelet tree
-long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsigned int*result)
+long long int approximate_search_in_FM_index_entry(char *pattern, unsigned int*result)
 {
  unsigned int pattern_length = strlen(pattern);
  unsigned int k,temp, length,j;
@@ -856,7 +311,7 @@ long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsig
  char current_error = 0;
  
  //search last part of the pattern
- unsigned char searching_part[pattern_length];
+ char searching_part[pattern_length];
  unsigned int div_pattern_length = (pattern_length+1)/(max_error+1);
  unsigned int current_pattern_length = pattern_length;
 
@@ -904,7 +359,7 @@ long long int approximate_search_in_FM_index_entry(unsigned char *pattern, unsig
        }
        if (k<=max_error+1)
        {
-        unsigned char genome_test[pattern_length+2];
+        char genome_test[pattern_length+2];
         if (k>0)
         {
          memcpy(genome_test, &genome[temp], pattern_length+1);
@@ -1044,10 +499,15 @@ void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt)
   count_table = create_count_table(bwt);
   unsigned int bitword; unsigned int bit_index;
 
-  unsigned int sample_sa_part = chars_in_entry/sample_SA_size;  //8*4 = 32
-  unsigned int bits_part = chars_in_entry/8/sizeof(unsigned int); //8*4 = 32
-  unsigned int children_part = bits_part + 1; //9*4 = 36
-  unsigned int aux_part = 2; //2*4 = 8
+  unsigned int sample_sa_part = chars_in_entry/sample_SA_size;  //4*4 = 16B
+  unsigned int root_in_entry = chars_in_entry/8/sizeof(unsigned int); //128bits = 16B
+  unsigned int children_in_entry = root_in_entry + 1; //20B
+
+  unsigned int aux_part = 2; //how many in left and right
+
+  //12Bytes left = 
+  //max bitov v unsigned int je 32, log32 +1 = 6bits 6*4 = 24bits = 3B
+  //we should need 8Bytes for OCC children 
   unsigned int occ_root_part = 2; //2*4 = 8
   unsigned int total = (genome_length+255) / 256;
   
@@ -1063,11 +523,10 @@ void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt)
   unsigned int left_counter_iter = 0;
   unsigned int right_counter_iter = 0;
 
-
+  unsigned int carry = 0;
   unsigned int left_count = 0;
   unsigned int right_count = 0;
   unsigned int temp_count;
-  unsigned int WARP_SIZE = 128;
   unsigned int remainder;
 
  unsigned int frequencies[4];
@@ -1083,19 +542,19 @@ void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt)
   
  i = 0;
  while (--total)
- {
+{
 
-  //store wt root - positions 8..15
-  //printf("zacinam zapisovat %d ROOT na poziciu %d\n",bit_iter,i); //8 pre pozicie 0..7
+ //store wt root - positions 8..15
+ //printf("zacinam zapisovat %d ROOT na poziciu %d\n",bit_iter,i); //8 pre pozicie 0..7
  right_count = 0;
- for (a = 0; a<bits_part/2;a++)
+ for (a = 0; a<root_in_entry/2;a++)
  {
   entries[i++] = root->bitvector[bit_iter]>>32; 
   entries[i++] = root->bitvector[bit_iter];
   right_count += __builtin_popcountll(root->bitvector[bit_iter]);
   bit_iter++;
  }
- left_count = 256 - right_count;
+ left_count = chars_in_entry - right_count;
  
  //printf("zacinam zapisovat LEFT_INFO na poziciu %d\n",i); //1 pre info? ..8
  //store children info about how many
@@ -1175,18 +634,40 @@ if (bit_index) {
  //printf("zacinam zapisovat OCC_ROOT na poziciu %d\n",i);  //2hodnoty 18..19
  //store counters
  
- temp_count = 0;
-  for (a = 0; a < 2; a++)
-  {
-    temp_count += __builtin_popcount (entries[i+a-18]);
-  }
-  entries[i++] = temp_count;//count_unset_bits(root->bitvector,root_counter_iter-1,root->bitcount_table);
-  for (a = 2; a < 5; a++)
-  {
-    temp_count += __builtin_popcount (entries[i+a-19]);
-  }
-  entries[i++] = temp_count;//count_set_bits(root->bitvector,root_counter_iter-1,root->bitcount_table);
 
+ temp_count = 0;
+  for (a = 0; a < 4; a++)
+  {
+    entries[i] = entries[i] << 8;
+    entries[i] += temp_count;
+
+    carry = __builtin_popcount (entries[i+a-18]); 
+    temp_count += carry;
+    
+    
+    //printf("entries[%d] je %d, bits = %d,celkove%d,uloz%d\n",i+a-18,entries[i+a-18],__builtin_popcount (entries[i+a-18]),temp_count,entries[i]);
+  }
+
+  i++;
+  
+  //temp_count = 0;
+  for (a = 4; a < 8; a++)
+  {
+
+    /*temp_count = temp_count << 8;
+    temp_count += __builtin_popcount (entries[i+a-19]);
+  */
+    
+    entries[i] = entries[i] << 8;
+    entries[i] += temp_count;
+    carry = __builtin_popcount (entries[i+a-19]); 
+    temp_count += carry;
+    //printf("entries[%d] je %d, bits = %d,celkove%d\n",i+a-19,entries[i+a-19],__builtin_popcount (entries[i+a-19]),temp_count);
+  
+
+  }
+  //entries[i++] = temp_count;//count_set_bits(root->bitvector,root_counter_iter-1,root->bitcount_table);
+i++;
 
  /*printf("zacinam zapisovat %d left_OCC_CHILDREN na poziciu %d\n",left_counter_iter,i); //2hodnoty 20..21
  fflush(stdout);*/
@@ -1226,7 +707,7 @@ if (bit_index) {
 //printf("idem zapisat zvysky\n");
 //printf("zacinam zapisovat %d ROOT na poziciu %d\n",bit_iter,i); //8 pre pozicie 0..7
  right_count = 0;
- for (a = 0; a<bits_part/2;a++)
+ for (a = 0; a<root_in_entry/2;a++)
  {
   if (bit_iter*64 >= genome_length)
   {
@@ -1370,6 +851,26 @@ temp_count = 0;
   entries[i++] = sampleSA[sa_iter++];
 
 free(sampleSA);
+  
+ total_kmers = 1<<(k_mers_permutation*2); 
+ kmers_hash = (unsigned int*) malloc (total_kmers*sizeof(unsigned int)*2);
+ unsigned int *result = (unsigned int *) malloc (2*sizeof(unsigned int));
+  char *dna_seq = (char*)malloc(sizeof(char)*10);
+  dna_seq[9]='\0';
+  for (i=0;i<total_kmers;i++){
+    index_to_dna(i,dna_seq);
+
+    //printf("hladam %s.\n",dna_seq);
+    search_pattern_in_FM_index_entry(dna_seq,k_mers_permutation,result);
+    kmers_hash[2*i] = result[0];
+    kmers_hash[2*i+1] = result[1];
+    //printf("vysledok %d %d\n",kmers_hash[2*i],kmers_hash[2*i+1]);
+    //printf("vysledok %d %d\n",kmers_hash[2*dna_to_index(dna_seq)],kmers_hash[2*dna_to_index(dna_seq)+1]);
+
+  }
+  free(result);
+  free(dna_seq);
+
 }
 
 
@@ -1390,17 +891,28 @@ unsigned char search_pattern_in_FM_index_entry(char *pattern, unsigned char curr
    alphabet_index = get_alphabet_index(alphabet,pattern[--j]);
    
    //printf("res: %d %d\n",result[0], result[1]);
-   unsigned int entry_index1 = (result[0]>>8) * 32; //in each entry up to 256 chars
+   /*unsigned int entry_index1 = (result[0]>>8) * 32; //in each entry up to 256 chars
    unsigned int in_entry_index1 = result[0]&255; //v danom entry
 
    unsigned int entry_index2 = (result[1]>>8) * 32; //in each entry up to 256 chars
-   unsigned int in_entry_index2 = result[1]&255; //v danom entry
+   unsigned int in_entry_index2 = result[1]&255; //v danom entry*/
 
-  __builtin_prefetch (&entries[entry_index1], 0, 1);
-  __builtin_prefetch (&entries[entry_index2], 0, 1);
+   unsigned int entry_index1 = result[0]/256; //in each entry up to 256 chars
+   unsigned int in_entry_index1 = result[0]%256; //v danom entry
+   entry_index1 *=32;
 
-   result[0] = count_table[alphabet_index] + wt_rank_entry(alphabet_index, result[0], entry_index1, in_entry_index1);
-   result[1] = count_table[alphabet_index] + wt_rank_entry(alphabet_index, result[1], entry_index2, in_entry_index2);
+   __builtin_prefetch (&entries[entry_index1], 0, 3);
+    __builtin_prefetch (&entries[entry_index1+16], 0, 3);
+
+   unsigned int entry_index2 = result[1]/256; //in each entry up to 256 chars
+   unsigned int in_entry_index2 = result[1]%256;
+   entry_index2 *=32;
+
+  __builtin_prefetch (&entries[entry_index2], 0, 3);
+   __builtin_prefetch (&entries[entry_index2+16], 0, 3);
+
+   result[0] = count_table[alphabet_index] + wt_rank_entry(alphabet_index, entry_index1, in_entry_index1);
+   result[1] = count_table[alphabet_index] + wt_rank_entry(alphabet_index, entry_index2, in_entry_index2);
   }
 
 
@@ -1415,23 +927,81 @@ unsigned char search_pattern_in_FM_index_entry(char *pattern, unsigned char curr
 }
 
 
-unsigned int wt_rank_entry(unsigned char c, unsigned int position, unsigned int entry_index, unsigned int in_entry_index)
+unsigned int dna_to_index(char *s){
+ 
+ unsigned int i = 0;
+ unsigned int result = 0;
+
+//4^10 - 4MB
+ for (i=0;i<k_mers_permutation;i++) {
+  result = result << 2;
+  switch(s[i])
+  {
+    case 'A': 
+      result = result + 0; //00
+      break;
+    case 'C': 
+      result = result + 1; //01
+      break;
+    case 'G': 
+      result = result + 2; //10
+      break;
+    case 'T': 
+      result = result + 3; //11
+      break;
+  }
+ }
+ return result;
+}
+
+void index_to_dna(unsigned int index, char *dna){
+ 
+ unsigned int i,c;
+//4^10 - 4MB
+ for (i=0;i<k_mers_permutation;i++) {
+  c = index & 0x03;
+  index = index >>2;
+  switch(c)
+  {
+    case 0 :
+      dna[k_mers_permutation-i-1] = 'A'; //00
+      break;
+    case 1:
+      dna[k_mers_permutation-i-1] = 'C'; //01
+      break;
+    case 2:
+      dna[k_mers_permutation-i-1] = 'G'; //10
+      break;
+    case 3:
+      dna[k_mers_permutation-i-1] = 'T'; //11
+      break;
+  }
+ }
+}
+
+unsigned int wt_rank_entry(unsigned char c, unsigned int entry_index, unsigned int in_entry_index)
 {
  unsigned int i;
  unsigned int count = 0;
  unsigned int result = 0;
  unsigned int a = in_entry_index;
  unsigned int remainder = in_entry_index;
+ 
 
-  //spocitaju sa 1ky od zaciatku entry po dany in_entry_index
-  for (i=0;i<in_entry_index/32;i++)
-  {
-    count = count + __builtin_popcount(entries[entry_index+i]);
-    remainder = remainder - 32;
+ i = in_entry_index/32;
+ remainder = in_entry_index%32;
+ if (i>3){
+    count = entries[entry_index+19]>>((7-i)*8) & 0xff;
   }
-  if (remainder)
-   count = count + __builtin_popcount(entries[entry_index+i]>>(32-remainder));
+ else
+  {
+    count = entries[entry_index+18]>>((3-i)*8) & 0xff; 
+  }
 
+ if (remainder)
+   count = count + __builtin_popcount(entries[entry_index+i]>>(32-remainder)); 
+
+ 
  if (c == 0 || c == 3)
  {
   //bolo nutne spocitat nuly, preto invertujem
@@ -1441,36 +1011,34 @@ unsigned int wt_rank_entry(unsigned char c, unsigned int position, unsigned int 
   remainder = count;
   for (i=0;i<count/32;i++)
     {
-     result = result + __builtin_popcount(entries[entry_index+9+i]);
-     remainder = remainder - 32;
+     result += __builtin_popcount(entries[entry_index+9+i]);
+     remainder -= 32;
     }
   
    if (remainder)
-    result = result + __builtin_popcount(entries[entry_index+9+i]>>(32-remainder));
+    result += __builtin_popcount(entries[entry_index+9+i]>>(32-remainder));
 
-  if (c==0)
-   return (count - result + entries[entry_index + 20]);
-  
+  if (c)
+   return (result + entries[entry_index + 21]);
   else
-    return (result + entries[entry_index + 21]);
+   return (count - result + entries[entry_index + 20]);
  }
 
  else 
  {
-  a = entries[entry_index + 8]; //kolko bolo v left?
+  a = entries[entry_index + 8] + entry_index + 9; //kolko bolo v left?
   remainder = count;
   for (i=0;i<count/32;i++)
   {
-   result = result + __builtin_popcount(entries[entry_index+9+a+i]);
-   remainder = remainder - 32;
+   result = result + __builtin_popcount(entries[a+i]);
+   remainder -= 32;
   }
 
   if (remainder)
-   result = result + __builtin_popcount(entries[entry_index+9+a+i]>>(32-remainder));
+   result = result + __builtin_popcount(entries[a+i]>>(32-remainder));
 
  if (c==2)
    return (count - result + entries[entry_index + 22]);
-
   else
    return (result + entries[entry_index + 23]);
  }
@@ -1483,15 +1051,21 @@ unsigned int get_SA_value_entry(unsigned int bwt_position)
  unsigned short int in_entry_index; //v danom entry
  unsigned int character;
  unsigned char c;
+
+/*  clock_t t; 
+  t = clock(); */
+
+   //TOTO ZEFEKTIVNIT
  while(bwt_position%sample_SA_size!=0)
  {
   entry_index = (bwt_position/256) * 32;
   in_entry_index = bwt_position%256;
 
-  __builtin_prefetch (&entries[entry_index], 0, 3);
-  c = wt_access_entry(entry_index, in_entry_index);
-  character = get_alphabet_index(alphabet,c);
-  bwt_position = count_table[character] + wt_rank_entry(character, bwt_position, entry_index, in_entry_index);
+  __builtin_prefetch (&entries[entry_index], 0, 0);
+  __builtin_prefetch (&entries[entry_index+16], 0, 0);
+  character = wt_access_entry(entry_index, in_entry_index);
+  //character = get_alphabet_index(alphabet,c);
+  bwt_position = count_table[character] + wt_rank_entry(character, entry_index, in_entry_index);
   count++;
  }
  
@@ -1502,35 +1076,40 @@ unsigned int get_SA_value_entry(unsigned int bwt_position)
  if (result>=genome_length)
   result = result - genome_length;
 
- return result;
+/*
+t = clock() - t; 
+double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds 
+printf("get_SA_value took %f seconds to execute \n", time_taken); 
+*/
+return result;
 }
 
 
 //function which returns character on input position
 unsigned char wt_access_entry(unsigned int entry_index, unsigned short int in_entry_index)
 {
- unsigned int i;
- unsigned int count = 0;
- unsigned int a = in_entry_index;
- unsigned int remainder = in_entry_index;
+ unsigned char i;
+ unsigned char count = 0;
+ unsigned int a = entry_index;
+ unsigned char remainder = in_entry_index;
  //printf("indexy su %d %d \n",entry_index,in_entry_index);
   //spocitaju sa 1ky od zaciatku entry po dany in_entry_index
 
-  for (i=0;i<in_entry_index/32;i++)
+  for (i=0;i<in_entry_index/32;i++,a++)
   {
-    count = count + __builtin_popcount(entries[entry_index+i]);
+    count = count + __builtin_popcount(entries[a]);
     //printf("count je %d\n",count);
     remainder = remainder - 32;
   }
   if (remainder){
     //printf("hm remmainder %d\n",remainder);
-   count = count + __builtin_popcount(entries[entry_index+i]>>(32-remainder));
+   count = count + __builtin_popcount(entries[a]>>(32-remainder));
   }
   
 
 
   //printf("wut count je %d, i je%d\n",count,i);
-  if (get_bit_4byte(entries[entry_index + i],remainder))
+  if (get_bit_4byte(entries[a],remainder))
   {
 
     //printf("pocitam 1, entry_index %d\n",entry_index);
@@ -1542,9 +1121,9 @@ unsigned char wt_access_entry(unsigned int entry_index, unsigned short int in_en
     //printf("pre count %u, pristupujem na poziciu %u %u\n",count,count/sample_SA_size,remainder);
     //printf("entries[%d] je %u\n",entry_index + 9 + a + count/32, entries[entry_index + 9 + a + count/32]);
     if (get_bit_4byte(entries[entry_index + 9 + a + count/32], count%32))
-      return 'C';
+      return 1;
     else
-      return 'G';
+      return 2;
   }
 
   else
@@ -1554,9 +1133,9 @@ unsigned char wt_access_entry(unsigned int entry_index, unsigned short int in_en
     count = in_entry_index - count;
 
     if (get_bit_4byte(entries[entry_index + 9 + count / 32], count % 32))
-      return 'T';
+      return 3;
     else
-      return 'A';
+      return 0;
   }
 }
 
