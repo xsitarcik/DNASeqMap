@@ -519,7 +519,7 @@ if (bit_index){
 else
   entries[i++] = 0;
 
-//store right bitvector child
+//store right bitvector child //TOTO NAOPAK
  bitword = 0; bit_index = 0;
  for (a = (i/32)*256; a<((i/32)+1)*256;a++)
  {
