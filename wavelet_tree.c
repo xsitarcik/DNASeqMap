@@ -448,9 +448,9 @@ unsigned char *get_alphabet(struct huffman_node*node)
     const size_t left_alphabet_size = strlen((char *)left_alphabet);
     const size_t right_alphabet_size = strlen((char *)right_alphabet);
 
-    alphabet = (unsigned char *)malloc(left_alphabet_size+right_alphabet_size+2);
+   alphabet = (unsigned char *)malloc(left_alphabet_size+right_alphabet_size+2);
 
-    memcpy(alphabet, left_alphabet, left_alphabet_size);
+  memcpy(alphabet, left_alphabet, left_alphabet_size);
   memcpy(alphabet+left_alphabet_size, right_alphabet, right_alphabet_size+1);
   free(left_alphabet);
   free(right_alphabet);

@@ -12,7 +12,7 @@ unsigned int sample_OCC_size = 2; //in reality it's *64, MUST SET TO 2
 unsigned int sample_SA_size = 32;
 unsigned char max_error = 1;
 unsigned int THRESHOLD = 500;
-unsigned int k_mers_permutation = 9;
+unsigned int k_mers_permutation = 11;
 unsigned int total_kmers; //2^20 = 4^10
 unsigned int *kmers_hash;
 //>SRR493095.1 M00282:31:000000000-A0FFK:1:1:13945:1807 length=150
@@ -52,6 +52,13 @@ unsigned char max_bits = sizeof(unsigned long long int)*8;
 unsigned char*genome;
 unsigned int*count_table;
 unsigned int*entries;
+
+
+/*clock_t t_get_sa_value=0; 
+clock_t t_rank=0; 
+clock_t t_access=0; 
+clock_t t_approx_search=0;
+clock_t t_align=0;*/
 
 int convert_string_to_int(char *string)
 {
@@ -323,7 +330,7 @@ if (flag_wavelet_tree){
   }
 
   printf("...approximate searching...\n");
- k = 0;
+  k = 0;
   count = 0;
   char o = 0;
   char line[256];
@@ -361,23 +368,92 @@ if (flag_wavelet_tree){
     if (result_map)
     {
      ++count; 
-     printf("-%s-\n",pattern);
-     fflush(stdout);
-     printf("approximate position is %d\n",result_map);
+     /*printf("-%s-\n",pattern);
+     printf("approximate position is %d\n",result_map);*/
     }
    }
   }
-  //result_map = approximate_search_in_FM_index_entry("TCTATGGAAACTACAGGACTAACCTTCCTGGCAACCGGGGGCTGGGAATCTGTCACATGAGTCA",result);
-
+  
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
   printf("Total aligned reads: %d\n",count);
   printf("Total reads: %d\n",k);
   
+  double time_taken;
+ 
+  /*time_taken = ((double)t_align)/CLOCKS_PER_SEC; // in seconds 
+  printf("aligning took %f seconds to execute \n", time_taken); */
+  /*time_taken = ((double)t_rank)/CLOCKS_PER_SEC; // in seconds 
+  printf("ranking took %f seconds to execute \n", time_taken); 
+  time_taken = ((double)t_approx_search)/CLOCKS_PER_SEC; // in seconds 
+  printf("approx search took %f seconds to execute \n", time_taken); 
+  time_taken = ((double)t_get_sa_value)/CLOCKS_PER_SEC; // in seconds 
+  printf("getting SA value took %f seconds to execute \n", time_taken); 
+*/
+  /*time_taken = ((double)t_access)/CLOCKS_PER_SEC; // in seconds 
+  printf("searching a part %f seconds to execute \n", time_taken); */
+
  }
  else 
  {
+
+  rebuild_FM_index_into_entries(suffix_array,bwt);
+  unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
+
+  printf("...testing LOCATE...\n");
+  k = 0;
+  unsigned long counter2 = 0;
+  char o = 0;
+  char line[256];
+  clock_t begin1 = clock();
+  fgets(line, 256, fh_patterns);
+  //get name of the read
+  while (1) 
+  {
+   pattern[0] = '\0';
+   i = 0;
+   while (1)
+    {
+     if (fgets(line, 256, fh_patterns)!= NULL);
+      else{
+        o = 1;
+        break;
+      }
+     if (line[0] == '>')
+      break;
+     else {
+      strncpy(&pattern[i],line, strlen(line)-1);
+      i = i + strlen(line) - 1;
+    }
+
+    }
+   if (o)
+   //if (k > 2500000)
+    break;
+   
+   pattern[strlen(pattern)]='\0';
+   k++;
+
+    result_map = search_pattern_in_FM_index_entry(pattern,strlen(pattern),result);
+    //printf("processing %s\n",pattern);
+    //printf("%d-%d\n",result[0],result[1]);
+    /*if (result[0]<result[1])
+      printf("%s : %d\n",pattern,result[1]-result[0]);
+*/
+    for (i=result[0];i<result[1];i++){
+      //printf("i je %d\n",get_SA_value_entry(i));
+      get_SA_value_entry(i);
+      ++counter2;
+    }
+  }
+  
+  clock_t end1 = clock();
+  double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
+  printf("It took %lf seconds\n", time_spent1);
+  //printf("Total aligned reads: %d\n",count);
+  printf("Total reads: %d\n",k);
+  printf("Total occurences processed: %lu\n",counter2);
   printf("You need to specify -g -w or -n\n");
   exit(-1);  
   }

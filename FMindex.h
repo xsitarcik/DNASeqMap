@@ -16,6 +16,12 @@ extern unsigned int total_kmers;
 extern unsigned int* kmers_hash;
 
 
+/*extern clock_t t_get_sa_value; 
+extern clock_t t_rank; 
+extern clock_t t_access; 
+extern clock_t t_approx_search;
+extern clock_t t_align;  */
+
 struct FMIndex_WT
 {
 unsigned int end;
@@ -29,15 +35,12 @@ unsigned char search_pattern_in_FM_index_entry(char *pattern, unsigned char curr
 unsigned int get_SA_value_entry(unsigned int bwt_position);
 unsigned char wt_access_entry(unsigned int entry_index, unsigned short int in_entry_index);
 unsigned int wt_rank_entry(unsigned char c, unsigned int entry_index, unsigned int in_entry_index);
-unsigned int wt_access_rank_entry(unsigned int position, unsigned int entry_index, unsigned int in_entry_index);
+unsigned int wt_access_rank_entry(unsigned int entry_index, unsigned int in_entry_index);
 void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt);
 struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *bwt);
 unsigned int find_end(unsigned int *suffix_array);
 unsigned int *create_sample_SA(unsigned int *suffix_array);
 unsigned int *create_count_table(unsigned char *s);
-unsigned int **create_occurence_table(unsigned char *s);
-unsigned int count_occ(unsigned char *s, unsigned int **occurence_table, unsigned int position, unsigned char c, unsigned char character);
-unsigned int last_to_first(unsigned char c, unsigned int bwt_position, char *alphabet,unsigned int *count_table,unsigned char*bwt,unsigned int**occurence_table);
 unsigned char get_alphabet_index(char *alphabet, unsigned char c);
 unsigned int score(char a, char b);
 unsigned char align(char *p1, char*p2);
@@ -52,3 +55,4 @@ void threshold_search_pattern_in_FM_index_WT(char *pattern, unsigned int *result
 unsigned int extend_seed_in_FM_index_WT(unsigned char*pattern, unsigned int last, unsigned int*result);
 void index_to_dna(unsigned int index, char *dna);
 unsigned int dna_to_index(char *s);
+unsigned char search_pattern_in_FM_index_entry_without_hash(char *pattern, unsigned char current_pattern_length, unsigned int*result);
