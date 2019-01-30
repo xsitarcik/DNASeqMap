@@ -15,34 +15,22 @@ unsigned int THRESHOLD = 500;
 unsigned int k_mers_permutation = 11;
 unsigned int total_kmers; //2^20 = 4^10
 unsigned int *kmers_hash;
-//>SRR493095.1 M00282:31:000000000-A0FFK:1:1:13945:1807 length=150
-
-
-
-unsigned char load = 0;
 
 //program parameters
+unsigned char load = 0;
 unsigned char save = 0;
 char *save_name;
+char*filename_text;
+char *load_name;
+char*filename_patterns;
 
-char*filename_text;// = "alt_Celera_chr15.fa";
-char *load_name;// = "alt_Celera_chr15_bwt_withoutN.txt";
-char*filename_patterns;// = "SRR493095final.fasta";
-//unsigned char*filename_patterns = "data/kratke_ready.fasta";
-
-unsigned int MAX_READ_LENGTH = 200;
-unsigned int READS_CHUNK = 70;
+unsigned int MAX_READ_LENGTH = 250;
 
 char *alphabet = "ACGT";
 unsigned char alphabet_size = 3; //indexing from 0 so -1
 
-unsigned char file_with_chunks = 1;
-unsigned int CHUNK_SIZE = 70;
-
-
 unsigned char flag_wavelet_tree = 0;
 unsigned char flag_entries = 0;
-unsigned char flag_use_gpu = 0;
 
 //global program parametrrs
 unsigned int genome_length;
@@ -52,13 +40,6 @@ unsigned char max_bits = sizeof(unsigned long long int)*8;
 unsigned char*genome;
 unsigned int*count_table;
 unsigned int*entries;
-
-
-/*clock_t t_get_sa_value=0; 
-clock_t t_rank=0; 
-clock_t t_access=0; 
-clock_t t_approx_search=0;
-clock_t t_align=0;*/
 
 int convert_string_to_int(char *string)
 {
@@ -80,7 +61,6 @@ void print_help()
   printf(" Required option - choose only one\n");
   printf("  -w            use FM Index based on Huffman-shaped Wavelet tree\n");
   printf("  -n            use FM Index aggregated in eNtries\n");
-  printf("  -g            use GPU\n");
   printf(" Optional input:\n");
   printf("  -t <int>      max Threshold of values for aligning (default %d)\n",THRESHOLD);
   printf("  -e <int>      max allowed Error (default %d)\n", max_error);
@@ -101,9 +81,6 @@ int main ( int argc, char *argv[] )
  unsigned int *bitvector_length;
  struct FMIndex *FM_index = NULL;
  unsigned int result_map;
-
-
- /*naive_compress("AAGCT");*/
 
 //handle input options and parameters
 for (i = 1; i<argc; i++)
@@ -130,10 +107,6 @@ for (i = 1; i<argc; i++)
     flag_wavelet_tree = 1;
   else if (strcmp(argv[i],"-n") == 0)
     flag_entries = 1;
-  else if (strcmp(argv[i],"-g") == 0){
-    flag_use_gpu = 1;
-    flag_entries = 1;
-  }
 
   else if (strcmp(argv[i],"-r") == 0)
   {
@@ -163,14 +136,11 @@ for (i = 1; i<argc; i++)
  FILE *fh_patterns;
  char *pattern = (char*)malloc(sizeof(char)*MAX_READ_LENGTH);
  
-
  if (load)
  {
   fp = fopen(load_name,"r");
   if (fp) {
-   genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
-   //genome = load_genome_from_file(filename_text,&genome_length);
-   printf("Successfully loaded genome with length %u\n",genome_length);
+   genome = load_ref_sequence(filename_text,&genome_length);
    printf("...loading BWT from file %s... \n",load_name);
    genome_length = 0;
    fscanf (fp, "%u\n", &genome_length); 
@@ -189,23 +159,15 @@ for (i = 1; i<argc; i++)
  else 
  {
   //load main string from file
-  if (file_with_chunks){
-   genome = load_genome_from_file_by_chunks(CHUNK_SIZE,filename_text,&genome_length);
-   printf("loading by chunks\n");
-  }
-  else{
-   genome = load_genome_from_file(filename_text,&genome_length);
-   printf("normal loading\n");
-  }
+  genome = load_ref_sequence(filename_text,&genome_length);
   if (genome_length<=1)
   {
    printf("Error when reading file: %s\n",filename_text);
    exit(-1);
   }
   else
-  printf("Size of read genome is %d characters\n",genome_length);
+  printf("Reference sequence contains %d characters\n",genome_length);
 
-  //printf("read%s\n",genome);
   //create suffix array and bwt of main input string
   clock_t begin = clock();
   printf("...constructing BWT...\n");
@@ -287,8 +249,6 @@ if (flag_wavelet_tree){
    if (o)
     break;
 
-   /*printf("nacital: -%s-, %d\n",pattern,i);
-   fflush(stdout);*/
    pattern[i-1]='\0';
    k++;
    if (strchr(pattern,'N')==NULL)
@@ -298,7 +258,6 @@ if (flag_wavelet_tree){
     {
      ++count;
      printf("-%s-\n",pattern);
-     fflush(stdout);
      printf("approximate position is %d\n",result_map);
     }
    }
@@ -307,7 +266,7 @@ if (flag_wavelet_tree){
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
   printf("Total aligned reads: %d\n",count);
-  printf("Total reads: %d\n",k);
+  printf("Total reads: %d\n",k+1);
 
   free(FM_index_WT->sampleSA);
   free(count_table);
@@ -368,8 +327,6 @@ if (flag_wavelet_tree){
     if (result_map)
     {
      ++count; 
-     /*printf("-%s-\n",pattern);
-     printf("approximate position is %d\n",result_map);*/
     }
    }
   }
@@ -378,30 +335,14 @@ if (flag_wavelet_tree){
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
   printf("Total aligned reads: %d\n",count);
-  printf("Total reads: %d\n",k);
-  
-  double time_taken;
- 
-  /*time_taken = ((double)t_align)/CLOCKS_PER_SEC; // in seconds 
-  printf("aligning took %f seconds to execute \n", time_taken); */
-  /*time_taken = ((double)t_rank)/CLOCKS_PER_SEC; // in seconds 
-  printf("ranking took %f seconds to execute \n", time_taken); 
-  time_taken = ((double)t_approx_search)/CLOCKS_PER_SEC; // in seconds 
-  printf("approx search took %f seconds to execute \n", time_taken); 
-  time_taken = ((double)t_get_sa_value)/CLOCKS_PER_SEC; // in seconds 
-  printf("getting SA value took %f seconds to execute \n", time_taken); 
-*/
-  /*time_taken = ((double)t_access)/CLOCKS_PER_SEC; // in seconds 
-  printf("searching a part %f seconds to execute \n", time_taken); */
-
+  printf("Total reads: %d\n",k+1);
  }
+ 
  else 
  {
-
   rebuild_FM_index_into_entries(suffix_array,bwt);
   unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
 
-  printf("...testing LOCATE...\n");
   k = 0;
   unsigned long counter2 = 0;
   char o = 0;
@@ -429,7 +370,6 @@ if (flag_wavelet_tree){
 
     }
    if (o)
-   //if (k > 2500000)
     break;
    
    pattern[strlen(pattern)]='\0';
@@ -441,18 +381,18 @@ if (flag_wavelet_tree){
     /*if (result[0]<result[1])
       printf("%s : %d\n",pattern,result[1]-result[0]);
 */
-    for (i=result[0];i<result[1];i++){
+    /*for (i=result[0];i<result[1];i++){
       //printf("i je %d\n",get_SA_value_entry(i));
       get_SA_value_entry(i);
       ++counter2;
-    }
+    }*/
   }
   
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
   //printf("Total aligned reads: %d\n",count);
-  printf("Total reads: %d\n",k);
+  printf("Total reads: %d\n",k+1);
   printf("Total occurences processed: %lu\n",counter2);
   printf("You need to specify -g -w or -n\n");
   exit(-1);  

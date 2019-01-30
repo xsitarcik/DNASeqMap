@@ -2,80 +2,60 @@
 #include <string.h>
 #include <stdlib.h>
 #include "bwt.h"
+unsigned int buffer_size = 10000;
 
-//auxiliary method for loading genome from file by chunks with newlines
-unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, char*file,unsigned int*genome_length){
-  unsigned char *buffer = (unsigned char *)malloc(sizeof(unsigned char)*chunk_size);
-  char nazovTextu[250];
-  unsigned char *s = NULL;
-  unsigned int sum = 0;
-
-  size_t nread;
-
+unsigned char* load_ref_sequence(char*file,unsigned int*genome_length){
   FILE * f = fopen (file, "r");
+  size_t number_of_chars = 0;
+  size_t number_of_buffers = 1;
+  char c;
+  char stringName[251];
+  char *buffer = (char *) malloc (buffer_size*number_of_buffers);
 
   if (f)
   {
-   fgets(nazovTextu, 250, f);
-   printf("...nacitavam retazec %s",nazovTextu);
-
-   while ((nread = fread(buffer,1,chunk_size,f)) > 0)
-   {
-    //printf("%s",buffer);
-    s = (unsigned char*) realloc(s,(sum+nread)*sizeof(unsigned char));
-    if (s==NULL)
-     exit(1);
-    strncpy(&s[sum],buffer,nread);
-    sum += nread;
-
-    
-    fgetc(f); //reed newline
-
+   c = fgetc(f);
+   if (c=='>'){
+    fgets(stringName, 250, f);
+    printf("...loading referece sequence %s\n",stringName);
    }
-  }
-  else
+   else{
+    if (c=='A' || c=='C' || c=='G' || c=='T' || c=='N'){
+      if (c=='N')
+        c = 'T';
+      buffer[number_of_chars++] = c;
+    }
+   }
+
+   while ((c = fgetc(f)) != EOF){
+    if (c=='A' || c=='C' || c=='G' || c=='T' || c=='N'){
+      if (c=='N')
+        c = 'T';
+
+      buffer[number_of_chars++] = c;
+      if (number_of_chars==(number_of_buffers*buffer_size)){
+        number_of_buffers++;
+        buffer = (char *) realloc (buffer, buffer_size*number_of_buffers);
+      }
+    }
+   }
+ }
+ else
   {
-   printf("error when opening file %s for reading genome by chunks\n",file);
+   printf("error when loading reference sequence from file %s\n",file);
    exit(-1);
   }
 
-  free(buffer);
-  fclose(f);
 
- 
-  s = (unsigned char*) realloc(s,(sum+1)*sizeof(unsigned char));
-  s[sum] = '\0';
-  for (unsigned int i = 0; i<sum;i++){
-    if (s[i] == 'N')
-      s[i] = 'T';
-  }
-  *genome_length = sum;  //ulozenie poctu znakov velmi dlheho retazca
-  return s;
+  buffer = (char *) realloc (buffer, number_of_chars+1);
+
+  buffer[number_of_chars] = '\0';
+  *genome_length = number_of_chars;
+
+  return buffer;
+
 }
 
-//auxiliary method for loading genome from file
-unsigned char*load_genome_from_file( char*file,unsigned int*genome_length)
-{
-unsigned char * buffer;
-unsigned int length;
-FILE * f = fopen (file, "r");
-
-if (f)
-{
-  fseek (f, 0, SEEK_END);
-  length = ftell (f);
-  fseek (f, 0, SEEK_SET);
-  buffer = malloc (length);
-  if (buffer)
-  {
-    fread (buffer, 1, length, f);
-  }
-  fclose (f);
-}
- buffer[length]='\0';
- *genome_length = length;
- return buffer;
-}
 
 //procedura na zotriedenie a zlucenie casti
 void topDownMerge(unsigned char *s,unsigned int *positions, unsigned int begin, unsigned int mid, unsigned int end, unsigned int *pomocnePole, unsigned int length){
@@ -378,8 +358,8 @@ unsigned int *insertion_sort_array(unsigned int *suffix_array, unsigned char *s,
  return suffix_array;
 }
 
-//inicializovanie pola positions, kazda hodnota urcuje zaciatocnu poziciu rotacie
-//nasledne zotriedenie tohto pola, pricom sa porovnavaju rotacie retazca zacinajuce na tychto poziciach
+//init array of positions, each value represents position of suffix
+//sort this array by comparing suffixes on these positions to create suffix array
 unsigned int * mergesort_SA(unsigned int *suffix_array, unsigned char *s, unsigned int length){
   mergeSort(s,suffix_array,length);
   return suffix_array;
