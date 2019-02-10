@@ -12,7 +12,7 @@ unsigned int sample_OCC_size = 2; //in reality it's *64, MUST SET TO 2
 unsigned int sample_SA_size = 32;
 unsigned char max_error = 1;
 unsigned int THRESHOLD = 500;
-unsigned int k_mers_permutation = 3;
+unsigned int k_mers_permutation = 1;
 unsigned int total_kmers; //2^20 = 4^10
 unsigned int *kmers_hash;
 
@@ -33,6 +33,8 @@ unsigned char flag_wavelet_tree = 0;
 unsigned char flag_entries = 0;
 unsigned char flag_rankbitvectors=0;
 unsigned char flag_withoutSA = 0;
+unsigned char flag_locate = 0;
+unsigned char flag_count = 0;
 
 //global program parametrrs
 unsigned int genome_length;
@@ -77,6 +79,9 @@ void print_help()
   printf("  -b <string>   filename to save Built Bwt (defaultly not used)\n");
   printf("  -c <int>      value for sampling Counters (default %d)\n",sample_OCC_size*64);
   printf("  -s <int>      value for sampling Suff arr values (default %d)\n",sample_SA_size);
+  printf("  -k <int>      value of k in kmer hash table (default %d)\n",k_mers_permutation);
+  printf("  -x            run only operation locate for input(defaultly not used)\n");
+  printf("  -y            run only operation count for input(defaultly not used)\n");
 
 }
 int main ( int argc, char *argv[] )
@@ -104,6 +109,8 @@ for (i = 1; i<argc; i++)
     max_error = convert_string_to_int(argv[++i]);
   else if (strcmp(argv[i],"-s") == 0)
     sample_SA_size = convert_string_to_int(argv[++i]);
+  else if (strcmp(argv[i],"-k") == 0)
+    k_mers_permutation = convert_string_to_int(argv[++i]);
   else if (strcmp(argv[i],"-c") == 0){
     sample_OCC_size = convert_string_to_int(argv[++i])/64;
     if (sample_OCC_size<1){
@@ -119,6 +126,10 @@ for (i = 1; i<argc; i++)
     flag_rankbitvectors = 1;
   else if (strcmp(argv[i],"-g") == 0)
     flag_withoutSA = 1;
+  else if (strcmp(argv[i],"-x") == 0)
+    flag_locate = 1;
+  else if (strcmp(argv[i],"-y") == 0)
+    flag_count = 1;
 
   else if (strcmp(argv[i],"-r") == 0)
   {
@@ -296,7 +307,6 @@ if (flag_wavelet_tree){
    exit(-1);
   }
 
-  printf("...approximate searching...\n");
   k = 0;
   count = 0;
   char o = 0;
@@ -329,27 +339,25 @@ if (flag_wavelet_tree){
    
    pattern[strlen(pattern)]='\0';
    k++;
-   /*if (strchr(pattern,'N')==NULL)
-   {
+
+   if (flag_count)
+    result_map = search_pattern_in_FM_index_entry(pattern,strlen(pattern),result);  
+   else if(flag_locate){
+    result_map = search_pattern_in_FM_index_entry(pattern,strlen(pattern),result);  
+    for (i=result[0];i<result[1];i++){
+      get_SA_value_entry(i);
+      ++count;
+      }
+    }
+   else{
     result_map = approximate_search_in_FM_index_entry(pattern,result);
     if (result_map)
     {
+     printf("%s\n",pattern);
+     printf("approximate position is %u\n",result_map);
      ++count; 
     }
-   }*/
-   //if (k==1400996){
-   result_map = search_pattern_in_FM_index_entry(pattern,strlen(pattern),result);
-   /*if (result[1]>result[0])
-       printf("%u, processing %u-%u\n",k,result[0],result[1]);*/
-    for (i=result[0];i<result[1];i++){
-      //get_SA_value_entry(i);
-      /*printf("na %u pozicii je string %s|\n",get_SA_value_entry(i),pattern);
-      int helperko;
-      for (helperko=get_SA_value_entry(i)-1;helperko<get_SA_value_entry(i)+30;helperko++)
-       printf("%c",genome[helperko]);*/
-      ++count;
-    }
-   //}
+   }
   }
 
   clock_t end1 = clock();
@@ -363,7 +371,6 @@ if (flag_wavelet_tree){
 
   printf("...rankbitvector FM Index...\n");
   fflush(stdout);
-
 
   create_rank_bitvectors(bwt);
   unsigned int *result = (unsigned int*) malloc (sizeof(unsigned int)*2);
@@ -400,32 +407,31 @@ if (flag_wavelet_tree){
    pattern[strlen(pattern)]='\0';
    k++;
 
-   /*printf("approximate searching...%s|\n",pattern);
-   if (strchr(pattern,'N')==NULL)
-   {
-    result_map = approximate_search_in_rankbitvector(pattern,result);
+   if (flag_count)
+    result_map = search_pattern_in_rankbitvector(pattern,strlen(pattern),result);  
+   else if(flag_locate){
+    result_map = search_pattern_in_rankbitvector(pattern,strlen(pattern),result);  
+    for (i=result[0];i<result[1];i++){
+      get_SA_value_rankbitvector(i);
+      ++counter2;
+      }
+    }
+   else{
+    /*result_map = approximate_search_in_FM_index_entry(pattern,result);
     if (result_map)
     {
-     ++counter2; 
-    }
-   }*/
-
-   //printf("searching...\n");fflush(stdout);
-  //if (k==1400996){ 
-  result_map = search_pattern_in_rankbitvector(pattern,strlen(pattern),result);
-    /*if(result[1]>result[0])
-      printf("%u,processing %u-%u\n",k,result[0],result[1]);*/
-    for (i=result[0];i<result[1];i++){
-      //get_SA_value_rankbitvector(i);
-      ++counter2;
-    }
-   //}
+     printf("%s\n",pattern);
+     printf("approximate position is %u\n",result_map);
+     ++count; 
+    }*/
+    printf("error. Approximate search is not yet supported for rankbitvectors\n");
+    exit(-1);
+   }
   }
-  
+ 
   clock_t end1 = clock();
   double time_spent1 = (double)(end1 - begin1) / CLOCKS_PER_SEC;
   printf("It took %lf seconds\n", time_spent1);
-  //printf("Total aligned reads: %d\n",count);
   printf("Total reads: %d\n",k+1);
   printf("Total occurences processed: %lu\n",counter2);
   printf("You need to specify -g -w or -n\n");
@@ -471,27 +477,28 @@ if (flag_wavelet_tree){
    
    pattern[strlen(pattern)]='\0';
    k++;
-   /*if (strchr(pattern,'N')==NULL)
-   {
-    result_map = approximate_search_in_FM_index_entry(pattern,result);
+
+   if (flag_count)
+    result_map = search_pattern_in_FM_index_exSA(pattern,strlen(pattern),result);  
+   else if(flag_locate){
+    result_map = search_pattern_in_FM_index_exSA(pattern,strlen(pattern),result);  
+    for (i=result[0];i<result[1];i++){
+      get_SA_value_exSA(i);
+      ++count;
+      }
+    }
+   else{
+    /*result_map = approximate_search_in_FM_index_entry(pattern,result);
     if (result_map)
     {
+     printf("%s\n",pattern);
+     printf("approximate position is %u\n",result_map);
      ++count; 
-    }
-   }*/
-   //if (k==1400996){  
-   result_map = search_pattern_in_FM_index_exSA(pattern,strlen(pattern),result);  
-   /*if (result[1]>result[0])
-       printf("%u, processing %u-%u\n",k,result[0],result[1]);fflush(stdout);*/
-    for (i=result[0];i<result[1];i++){
-      //get_SA_value_exSA(i);
-      /*printf("na %u pozicii je string %s|\n",get_SA_value_entry(i),pattern);
-      int helperko;
-      for (helperko=get_SA_value_entry(i)-1;helperko<get_SA_value_entry(i)+30;helperko++)
-       printf("%c",genome[helperko]);*/
-      ++count;
-    }
-   //}
+    }*/
+    printf("error. Approximate search is not yet supported this option\n");
+    exit(-1);
+   }
+
   }
 
   clock_t end1 = clock();
