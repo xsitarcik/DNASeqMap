@@ -30,6 +30,7 @@ struct wavelet_tree *build_huffman_shaped_WT(unsigned char *s, unsigned int *fre
 struct wavelet_tree *build_WT_node(struct huffman_node *root, unsigned char *s);
 unsigned long long int get_bit(unsigned long long int var, unsigned int position);
 unsigned int get_bit_4byte(unsigned int var, unsigned int position);
+unsigned int get_bit_4byte_reversed(unsigned int var, unsigned int position);
 unsigned int wt_rank(unsigned char c, unsigned int position, struct wavelet_tree *root);
 unsigned char wt_access(unsigned int position, struct wavelet_tree *root);
 unsigned int count_set_bits(unsigned long long int*bitvector, unsigned int position, unsigned int* bitcount_table);

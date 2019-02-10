@@ -1,10 +1,10 @@
+unsigned char* load_ref_sequence(char*file,unsigned int*genome_length);
 unsigned int *init_suffix_array(unsigned int *suffix_array,unsigned char *s, unsigned int genome_length);
 unsigned int max(unsigned int number1,unsigned int number2);
 unsigned int min(unsigned int number1,unsigned int number2);
 unsigned int compare_rotations(unsigned char *s, unsigned int start1, unsigned int start2, unsigned int genome_length);
 unsigned int *insertion_sort_array(unsigned int *suffix_array, unsigned char *s, unsigned int genome_length);
 unsigned char *create_bwt(unsigned int *suffix_array, unsigned char *s, unsigned int genome_length);
-unsigned char*load_genome_from_file(char*file,unsigned int*genome_length);
 void reverse_string(unsigned char *str);
 void topDownMerge(unsigned char *s,unsigned int *positions, unsigned int begin, unsigned int mid, unsigned int end, unsigned int *pomocnePole, unsigned int length);
 void topDownSplitMerge (unsigned char *s,unsigned int *positions, unsigned int begin, unsigned int end, unsigned int *pomocnePole, unsigned int length);
@@ -12,4 +12,3 @@ void copyArr(unsigned int src[], unsigned int begin, unsigned int end, unsigned 
 void mergeSort(unsigned char*s,unsigned int *positions,unsigned int size);
 unsigned int porovnaj(unsigned char *s,unsigned int start1,unsigned int start2,unsigned int genome_length);
 unsigned int * mergesort_SA(unsigned int *suffix_array, unsigned char *s, unsigned int length);
-unsigned char * load_genome_from_file_by_chunks(unsigned int chunk_size, char*file,unsigned int*genome_length);

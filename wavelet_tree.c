@@ -92,6 +92,12 @@ unsigned int get_bit_4byte(unsigned int var, unsigned int position)
   return (var >> (31-position)) & 1;
 }
 
+unsigned int get_bit_4byte_reversed(unsigned int var, unsigned int position)
+{
+//return ((var) & (1LL<<(64-position)));
+  return (var << (31-position)) & 2147483648;
+}
+
 unsigned int wt_rank(unsigned char c, unsigned int position, struct wavelet_tree *root)
 {
  unsigned int count = 0;

@@ -14,8 +14,10 @@ extern unsigned int THRESHOLD;
 extern unsigned int k_mers_permutation;
 extern unsigned int total_kmers;
 extern unsigned int* kmers_hash;
-
-
+extern unsigned int*root_rankvector;
+extern unsigned int*left_rankvector;
+extern unsigned int*right_rankvector;
+extern unsigned int*sample_SA;
 /*extern clock_t t_get_sa_value; 
 extern clock_t t_rank; 
 extern clock_t t_access; 
@@ -28,6 +30,14 @@ unsigned int end;
 unsigned int *sampleSA;
 };
 
+unsigned int get_SA_value_exSA(unsigned int bwt_position);
+unsigned char search_pattern_in_FM_index_exSA(char *pattern, unsigned char current_pattern_length, unsigned int*result);
+unsigned char search_pattern_in_FM_index_exSA_without_hash(char *pattern, unsigned char current_pattern_length, unsigned int*result);
+long long int approximate_search_in_rankbitvector(char *pattern, unsigned int*result);
+unsigned int get_SA_value_rankbitvector(unsigned int bwt_position);
+unsigned char search_pattern_in_rankbitvector(char*pattern,unsigned char current_pattern_length, unsigned int*result);
+unsigned int wt_rank_bitvector(unsigned char c, unsigned int position);
+void create_rank_bitvectors(unsigned char*bwt);
 long long int approximate_search_in_FM_index_entry(char *pattern, unsigned int*result);
 void threshold_search_pattern_in_FM_index_entry(char *pattern, unsigned int *result_length, unsigned int *result, unsigned int pattern_length);
 unsigned int extend_seed_in_FM_index_entry(unsigned char*pattern, unsigned int last, unsigned int*result);
@@ -36,7 +46,7 @@ unsigned int get_SA_value_entry(unsigned int bwt_position);
 unsigned char wt_access_entry(unsigned int entry_index, unsigned short int in_entry_index);
 unsigned int wt_rank_entry(unsigned char c, unsigned int entry_index, unsigned int in_entry_index);
 unsigned int wt_access_rank_entry(unsigned int entry_index, unsigned int in_entry_index);
-void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt);
+void rebuild_FM_index_into_entries(unsigned int*suffix_array, unsigned char*bwt,unsigned char flag_withSA);
 struct FMIndex_WT*build_FM_index_WT(unsigned int *suffix_array, unsigned char *bwt);
 unsigned int find_end(unsigned int *suffix_array);
 unsigned int *create_sample_SA(unsigned int *suffix_array);
