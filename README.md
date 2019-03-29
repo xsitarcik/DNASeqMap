@@ -21,7 +21,7 @@ Optional input:
 
 ## Compilation
 DNASeqMap file is already executable compiled file. Otherwise compilation is as follows (with use of [Clang compiler](https://clang.llvm.org/)):   
-`clang main.c bwt.c FMindex.c wavelet_tree.c-o DNASeqMap -O3 -funroll-loops -fomit-frame-pointer -ffast-math`
+`clang main.c bwt.c FMindex.c wavelet_tree.c -o DNASeqMap -O3 -funroll-loops -fomit-frame-pointer -ffast-math`
 
 ## Examples
 To map input sequences from file `patterns.fa` in reference sequence from file `refsequence.fa` and use FM-index interleaved without sampled suffix array:   
